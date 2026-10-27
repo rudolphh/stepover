@@ -45,7 +45,7 @@ STEPOVER_APP="$OUT/Stepover.app" STEPOVER_BIN=none STEPOVER_BUNDLE_ID="$BUNDLE_I
     STEPOVER_SOURCE_URL="https://github.com/$REPO" STEPOVER_RUNTIME_JSON="$OUT/runtime.json" \
     "$ROOT/app/build-app.sh"
 APP_FILE="Stepover-$VERSION.zip"
-(cd "$OUT" && ditto -c -k --keepParent Stepover.app "$APP_FILE")
+(cd "$OUT" && ditto -c -k --norsrc --noextattr --noacl --keepParent Stepover.app "$APP_FILE")
 rm -rf "$OUT/Stepover.app"
 APP_SHA="$(shasum -a 256 "$OUT/$APP_FILE" | cut -d' ' -f1)"
 
