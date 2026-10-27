@@ -76,6 +76,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          touch "$RUNNER_TEMP/check.txt" "$RUNNER_TEMP/review.txt"  # note() reads both; either may not exist
           # The checker's output repeats text from the pull request: strip backticks and @ so it
           # stays inside the code block and mentions no one.
           note() { { echo "$1"; echo; echo '```'; cat "$RUNNER_TEMP/check.txt" "$RUNNER_TEMP/review.txt" 2>/dev/null | tr '`@' "'_"; echo '```'; } > "$RUNNER_TEMP/comment.md"
