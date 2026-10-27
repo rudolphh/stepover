@@ -1,0 +1,86 @@
+#!/bin/bash
+# Checks a built Stepover runtime before it goes anywhere: every part is there, Wine boots a new bottle,
+# a Windows program runs, the compat plug-in loads, and with --previous a bottle made by the previous
+# runtime starts on this one. Uses the real `stepover` command in a temporary home, so the user's
+# bottles, logs and launchers are never touched. Prints "ok <check>" or "FAIL <check>: <reason>" and
+# exits 1 at the first failure.
+#
+#   check-runtime.sh <runtime dir> [--previous <runtime dir>] [--metal]
+#   STEPOVER_CLI   the stepover command (default app/.build/release/stepover)
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+RUNTIME="$(cd "${1:?usage: check-runtime.sh <runtime dir> [--previous <runtime dir>] [--metal]}" && pwd)"
+shift
+PREVIOUS="" METAL=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --previous) PREVIOUS="$(cd "$2" && pwd)"; shift 2 ;;
+        --metal) METAL=1; shift ;;
+        *) echo "unknown option $1" >&2; exit 2 ;;
+    esac
+done
+CLI="${STEPOVER_CLI:-$ROOT/app/.build/release/stepover}"
+[ -x "$CLI" ] || { echo "no stepover command at $CLI (swift build -c release --package-path app --product stepover)" >&2; exit 2; }
+
+fail() { echo "FAIL $1: $2"; exit 1; }
+limit() { perl -e 'alarm shift; exec @ARGV or die "$ARGV[0]: $!\n"' "$@"; }   # limit <seconds> <command...>
+NAME="$(basename "$RUNTIME")"
+
+for p in bin/wine bin/wineserver lib/wine/x86_64-unix/cxcompatdb.so lib/d3dmetal/external/D3DMetal.framework \
+         lib/dxmt/x86_64-windows share/wine/mono share/wine/gecko; do
+    [ -e "$RUNTIME/$p" ] || fail files "missing $p"
+done
+if grep -q '^dxvk=' "$RUNTIME/VERSION" && ! grep -q '^dxvk=none$' "$RUNTIME/VERSION"; then
+    [ -e "$RUNTIME/lib/dxvk/x86_64-windows" ] || fail files "missing lib/dxvk/x86_64-windows"
+fi
+echo "ok files"
+
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/stepover-check.XXXX")"
+export STEPOVER_HOME="$TMP/home" STEPOVER_LOGS="$TMP/logs" STEPOVER_LAUNCHERS="$TMP/launchers"
+export STEPOVER_RUNTIMES="$TMP/runtimes"
+unset STEPOVER_BOTTLES STEPOVER_FIXES
+mkdir -p "$STEPOVER_RUNTIMES"
+ln -s "$RUNTIME" "$STEPOVER_RUNTIMES/$NAME"
+cleanup() {
+    for b in check check-previous; do STEPOVER_RUNTIME="$NAME" "$CLI" stop "$b" >/dev/null 2>&1 || true; done
+    rm -rf "$TMP"
+}
+trap cleanup EXIT
+x86_64-w64-mingw32-gcc -O2 -o "$TMP/hello.exe" "$ROOT/runtime/tests/hello.c"
+
+# boot <bottle> <runtime name>: a new bottle, set up by that runtime.
+boot() {
+    STEPOVER_RUNTIME="$2" limit 300 "$CLI" create "$1" >"$TMP/create-$1.log" 2>&1 || return 1
+    cp "$TMP/hello.exe" "$STEPOVER_HOME/Bottles/$1/drive_c/hello.exe"
+}
+# hello <bottle> <runtime name>: runs hello.exe there and waits; with --wait, stepover run passes the
+# program's output (and the plug-in's debug lines) to its caller, so it lands in $TMP/run-<bottle>.log.
+hello() {
+    STEPOVER_RUNTIME="$2" STEPOVER_COMPAT_DEBUG=1 limit 300 "$CLI" run "$1" 'C:\hello.exe' --wait >"$TMP/run-$1.log" 2>&1
+}
+
+boot check "$NAME" || fail boot "stepover create failed or took over 300 s: $(tail -3 "$TMP/create-check.log" | tr '\n' ' ')"
+echo "ok boot"
+
+hello check "$NAME" || fail program "hello.exe failed or took over 300 s"
+grep -q stepover-check "$TMP/run-check.log" || fail program "hello.exe printed nothing"
+echo "ok program"
+
+grep -q 'stepover-compat: hello.exe: backend' "$TMP/run-check.log" ||
+    fail plugin "the compat plug-in didn't report a backend for hello.exe"
+echo "ok plugin"
+
+if [ -n "$PREVIOUS" ]; then
+    PNAME="$(basename "$PREVIOUS")"
+    [ "$PNAME" != "$NAME" ] || PNAME="$PNAME-previous"   # a rebuild of the same version
+    ln -s "$PREVIOUS" "$STEPOVER_RUNTIMES/$PNAME"
+    boot check-previous "$PNAME" || fail previous "creating a bottle with $PNAME failed"
+    hello check-previous "$NAME" || fail previous "hello.exe failed on $NAME in a bottle made by $PNAME"
+    grep -q stepover-check "$TMP/run-check-previous.log" || fail previous "hello.exe printed nothing"
+    echo "ok previous"
+fi
+
+if [ "$METAL" = 1 ]; then
+    [ -f "$ROOT/runtime/tests/d3d11.c" ] && [ -f "$ROOT/runtime/tests/d3d12.c" ] ||
+        fail metal "runtime/tests/d3d11.c and d3d12.c are missing"
+fi
