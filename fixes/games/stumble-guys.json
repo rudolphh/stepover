@@ -1,0 +1,7 @@
+{
+  "name": "Stumble Guys",
+  "match": { "steam": [1677740], "exe": ["Stumble Guys.exe"] },
+  "graphics": "d3dmetal",
+  "notes": "Runs well on D3DMetal through Steam: 120 fps (display-locked) at the menu at 3456x2234 with High Resolution Mode on an M4 Max, GPU about 2.5 ms per frame.",
+  "source": "Tested with Stepover 0.1.2 on an M4 Max, October 2026"
+}
