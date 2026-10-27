@@ -29,6 +29,10 @@ struct StepoverApp: App {
             CommandGroup(replacing: .help) {
                 Button("Licenses and Notices") { store.openLicenses() }
                 Button("Stepover Source Code") { store.openSource() }
+                if let link = Bundle.main.object(forInfoDictionaryKey: "StepoverSponsorURL") as? String,
+                   let url = URL(string: link) {
+                    Button("Support Stepover") { NSWorkspace.shared.open(url) }
+                }
             }
         }
     }

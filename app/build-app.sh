@@ -5,6 +5,7 @@
 #   STEPOVER_BUNDLE_ID     default io.github.rudolphh.stepover
 #   STEPOVER_VERSION       default: the VERSION file
 #   STEPOVER_SOURCE_URL    shown under Help > Stepover Source Code
+#   STEPOVER_SPONSOR_URL   opened by Help > Support Stepover (set it empty to leave the item out)
 #   STEPOVER_RUNTIME_JSON  runtime manifest to embed (release builds; see release/make-release.sh)
 set -eu
 SRC="${0:A:h}"
@@ -13,6 +14,7 @@ BIN="${STEPOVER_BIN:-$HOME/.local/bin}"
 BUNDLE_ID="${STEPOVER_BUNDLE_ID:-io.github.rudolphh.stepover}"
 VERSION="${STEPOVER_VERSION:-$(cat "$SRC/../VERSION")}"
 SOURCE_URL="${STEPOVER_SOURCE_URL:-https://github.com/rudolphh/stepover}"
+SPONSOR_URL="${STEPOVER_SPONSOR_URL-https://github.com/sponsors/rudolphh}"
 
 cd "$SRC"
 swift build -c release --product stepover
@@ -51,6 +53,7 @@ cat > "$STAGE/Contents/Info.plist" <<EOF
   <key>LSApplicationCategoryType</key><string>public.app-category.games</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>StepoverSourceURL</key><string>$SOURCE_URL</string>
+$([ -n "$SPONSOR_URL" ] && echo "  <key>StepoverSponsorURL</key><string>$SPONSOR_URL</string>")
 </dict>
 </plist>
 EOF

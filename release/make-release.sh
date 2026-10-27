@@ -42,7 +42,8 @@ EOF
 
 echo "== app"
 STEPOVER_APP="$OUT/Stepover.app" STEPOVER_BIN=none STEPOVER_BUNDLE_ID="$BUNDLE_ID" STEPOVER_VERSION="$VERSION" \
-    STEPOVER_SOURCE_URL="https://github.com/$REPO" STEPOVER_RUNTIME_JSON="$OUT/runtime.json" \
+    STEPOVER_SOURCE_URL="https://github.com/$REPO" STEPOVER_SPONSOR_URL="https://github.com/sponsors/$OWNER" \
+    STEPOVER_RUNTIME_JSON="$OUT/runtime.json" \
     "$ROOT/app/build-app.sh"
 APP_FILE="Stepover-$VERSION.zip"
 (cd "$OUT" && ditto -c -k --norsrc --noextattr --noacl --keepParent Stepover.app "$APP_FILE")

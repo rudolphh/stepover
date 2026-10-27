@@ -63,6 +63,13 @@ Hi-Fi Rush, Escape from Duckov and L.A. Noire, each matching its CrossOver frame
 Steam client (sign-in, store, downloads), which ran Stumble Guys at 117 fps. Games with kernel
 anti-cheat will not run.
 
+## Support
+
+Stepover is free, and every feature stays free for everyone. If it is useful to you, you can support
+its development through [GitHub Sponsors](https://github.com/sponsors/rudolphh) (Help > Support
+Stepover in the app). Sponsoring does not unlock anything, and Stepover is never sold: Apple's D3DMetal
+is licensed for non-commercial use only. Adding a fix for a game you got running helps just as much.
+
 ## Licenses
 
 Stepover's own code is GPL-3.0 (`LICENSE`). The runtime includes:
