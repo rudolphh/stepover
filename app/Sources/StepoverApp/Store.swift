@@ -114,6 +114,16 @@ final class Store: ObservableObject {
         work(nil, args.joined(separator: " ")) { try Launcher.wine(args, bottle: bottle, wait: false) }
     }
 
+    /// Asks for an .exe or .msi in the bottle and runs it.
+    func runExe(in bottle: Bottle) {
+        let panel = NSOpenPanel()
+        panel.directoryURL = bottle.cDrive
+        panel.allowedContentTypes = [.init(filenameExtension: "exe")!, .init(filenameExtension: "msi")!]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let windows = WindowsPath.toWindows(url, bottle: bottle)
+        runTool(url.pathExtension.lowercased() == "msi" ? ["msiexec", "/i", windows] : [windows], in: bottle)
+    }
+
     func stop(_ bottle: Bottle) {
         work(bottle, "Stopping \(bottle.name)") { try Launcher.stop(bottle) }
     }

@@ -5,11 +5,13 @@ import SwiftUI
 @main
 struct StepoverApp: App {
     @StateObject private var store = Store()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
         WindowGroup("Stepover") {
             ContentView()
                 .environmentObject(store)
+                .onAppear { appDelegate.store = store }
                 .frame(minWidth: 880, minHeight: 560)
                 .alert("Stepover", isPresented: Binding(get: { store.alert != nil }, set: { if !$0 { store.alert = nil } })) {
                     Button("OK") { store.alert = nil }
@@ -256,14 +258,7 @@ struct BottleView: View {
         .navigationSubtitle(running ? "Running" : "")
     }
 
-    private func runExe() {
-        let panel = NSOpenPanel()
-        panel.directoryURL = bottle.cDrive
-        panel.allowedContentTypes = [.init(filenameExtension: "exe")!, .init(filenameExtension: "msi")!]
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        let windows = WindowsPath.toWindows(url, bottle: bottle)
-        store.runTool(url.pathExtension.lowercased() == "msi" ? ["msiexec", "/i", windows] : [windows], in: bottle)
-    }
+    private func runExe() { store.runExe(in: bottle) }
 }
 
 struct ProgramRow: View {

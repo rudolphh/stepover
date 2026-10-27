@@ -35,6 +35,8 @@ checksum built into the app.
    on **MetalFX** for games with DLSS.
 4. **Components** installs runtimes games ask for (Visual C++, .NET, DirectX extras, PhysX).
 5. **Make Mac App** puts a launcher with the game's icon in `~/Applications/Stepover`.
+6. **The Dock menu** (right-click Stepover in the Dock) has your recent games, every game by bottle,
+   Run .exe… and Stop Everything. A running game is checked, with Bring to Front and Stop.
 
 Bottle settings cover MSync, High Resolution Mode (full Retina pixels) and Windows scaling. CrossOver
 bottles can be imported as instant copies; CrossOver's own bottle is not touched.
@@ -67,6 +69,8 @@ from [umu-protonfixes](https://github.com/Open-Wine-Components/umu-protonfixes).
 - **Every Retina pixel.** High Resolution Mode gives games 3456x2234 instead of 1728x1117 on a 16-inch
   MacBook Pro, with Windows scaling per bottle to match.
 - **A Mac app for every game,** with its icon, in `~/Applications/Stepover`.
+- **A Dock menu that knows what's running:** recent games first, icons, and Bring to Front or Stop
+  for a game that's already open instead of starting it twice.
 - **All of it from Terminal too:** `stepover help`.
 - **Checked downloads, careful updates.** The runtime is verified against a checksum built into the
   app, and an update waits until no game is running.

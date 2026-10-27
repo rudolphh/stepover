@@ -102,8 +102,10 @@ public enum Launcher {
         let workdir = program.workdir.flatMap { WindowsPath.toMac($0, bottle: bottle) } ?? exe.deletingLastPathComponent()
         applyFixes(bottle)
         appendLog(bottle, "launching \(program.name): \(program.exe) \(program.args.joined(separator: " "))")
-        return try wine([program.exe] + program.args + extraArgs, bottle: bottle, program: program,
-                        workdir: workdir, wait: wait, output: output)
+        let status = try wine([program.exe] + program.args + extraArgs, bottle: bottle, program: program,
+                              workdir: workdir, wait: wait, output: output)
+        RecentGames.record(program.name, bottle: bottle.name)
+        return status
     }
 
     /// Stops every Wine process in the bottle.

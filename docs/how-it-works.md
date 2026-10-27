@@ -87,6 +87,17 @@ so a runtime with an identical `wine.inf` (only its date differs) skips the redo
 process it started (`wineserver -w`), then adds the programs whose Start Menu or desktop shortcuts
 appeared. Components (`stepover components`) are winetricks verbs run with the bottle's own Wine.
 
+## The Dock menu
+
+Every start through `Launcher.run` (the app, `stepover run` and the Mac launchers) is recorded in
+`<STEPOVER_HOME>/recent.json`, which orders the Dock menu's recent games. Running games are found
+without the app having started them: Wine names each process after its Windows path (argv[0] is
+`C:\...\game.exe`) and keeps its working directory inside the bottle, so `RunningPrograms` matches a
+process to a bottle by that directory (Wine overwrites the environment, so `WINEPREFIX` can't be
+read). In a bottle with one program, any running non-system process counts as that program, because
+launchers often exit once the game starts. Bring to Front activates the game's process, which Wine
+registers as a regular macOS app.
+
 ## The runtime download
 
 The app is small; the runtime (`stepover-runtime-<name>.tar.xz`, about 290 MB, 1.1 GB unpacked) is a
