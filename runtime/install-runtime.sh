@@ -1,6 +1,7 @@
 #!/bin/bash
 # Assembles the Stepover runtime in $RUNTIMES/$RUNTIME_NAME from the Wine build, the x86_64 host
-# libraries, Stepover's compat plug-in, Apple's D3DMetal (from the Game Porting Toolkit disk image),
+# libraries, Stepover's compat plug-in, Apple's D3DMetal (from the Game Porting Toolkit disk image, or
+# with STEPOVER_D3DMETAL_ARCHIVE from a published Stepover runtime archive, which is how CI gets it),
 # upstream DXMT, and Wine Mono/Gecko. The previous runtime is kept as <name>.old for rollback.
 #
 #   lib/wine/x86_64-unix/cxcompatdb.so   Stepover's per-program graphics picker (../compat)
@@ -10,7 +11,7 @@ set -euo pipefail
 source "$(dirname "$0")/config.sh"
 
 [ -x "$INSTALL/lib/wine/x86_64-unix/wine" ] || { echo "no Wine build, run build-wine.sh" >&2; exit 1; }
-[ -f "$GPTK_DMG" ] || { echo "no Game Porting Toolkit disk image at $GPTK_DMG" >&2; exit 1; }
+[ -n "${STEPOVER_D3DMETAL_ARCHIVE:-}" ] || [ -f "$GPTK_DMG" ] || { echo "no Game Porting Toolkit disk image at $GPTK_DMG" >&2; exit 1; }
 
 DEST="$RUNTIMES/$RUNTIME_NAME"
 STAGE="$DEST.new"
@@ -36,20 +37,34 @@ clang -arch x86_64 -shared -O2 -Wall -mmacosx-version-min="$MACOSX_DEPLOYMENT_TA
     "$STAGE/lib/wine/x86_64-unix/ntdll.so" -Wl,-rpath,@loader_path -install_name @rpath/cxcompatdb.so
 
 echo "== D3DMetal"
-MNT="$(mktemp -d "${TMPDIR:-/tmp}/stepover-gptk.XXXX")"
-INNER="$(mktemp -d "${TMPDIR:-/tmp}/stepover-gptk-inner.XXXX")"
-cleanup() { hdiutil detach "$INNER" >/dev/null 2>&1 || true; hdiutil detach "$MNT" >/dev/null 2>&1 || true; rmdir "$MNT" "$INNER" 2>/dev/null || true; }
-trap cleanup EXIT
-hdiutil attach -readonly -nobrowse -noverify -mountpoint "$MNT" "$GPTK_DMG" >/dev/null
-EVAL="$(find "$MNT" -maxdepth 1 -name 'Evaluation environment*.dmg' | head -1)"
-[ -n "$EVAL" ] || { echo "no evaluation environment inside $GPTK_DMG" >&2; exit 1; }
-hdiutil attach -readonly -nobrowse -noverify -mountpoint "$INNER" "$EVAL" >/dev/null
-mkdir -p "$STAGE/lib/d3dmetal"
-ditto "$INNER/redist/lib/external" "$STAGE/lib/d3dmetal/external"
-ditto "$INNER/redist/lib/wine" "$STAGE/lib/d3dmetal/wine"
-mkdir -p "$STAGE/licenses/d3dmetal"
-cp "$INNER/License.rtf" "$INNER/Acknowledgements.rtf" "$STAGE/licenses/d3dmetal/"
-cleanup; trap - EXIT
+if [ -n "${STEPOVER_D3DMETAL_ARCHIVE:-}" ]; then
+    # CI can't download the Game Porting Toolkit; a published runtime already carries D3DMetal.
+    FROM="$(mktemp -d "${TMPDIR:-/tmp}/stepover-d3dmetal.XXXX")"
+    tar -xJf "$STEPOVER_D3DMETAL_ARCHIVE" -C "$FROM" --include='*/lib/d3dmetal/*' --include='*/licenses/d3dmetal/*' 2>/dev/null || true
+    LIB="$(find "$FROM" -mindepth 3 -maxdepth 3 -type d -path '*/lib/d3dmetal' | head -1)"
+    LIC="$(find "$FROM" -mindepth 3 -maxdepth 3 -type d -path '*/licenses/d3dmetal' | head -1)"
+    if [ -z "$LIB" ] || [ -z "$LIC" ]; then
+        rm -rf "$FROM"; echo "no D3DMetal in $STEPOVER_D3DMETAL_ARCHIVE" >&2; exit 1
+    fi
+    ditto "$LIB" "$STAGE/lib/d3dmetal"
+    ditto "$LIC" "$STAGE/licenses/d3dmetal"
+    rm -rf "$FROM"
+else
+    MNT="$(mktemp -d "${TMPDIR:-/tmp}/stepover-gptk.XXXX")"
+    INNER="$(mktemp -d "${TMPDIR:-/tmp}/stepover-gptk-inner.XXXX")"
+    cleanup() { hdiutil detach "$INNER" >/dev/null 2>&1 || true; hdiutil detach "$MNT" >/dev/null 2>&1 || true; rmdir "$MNT" "$INNER" 2>/dev/null || true; }
+    trap cleanup EXIT
+    hdiutil attach -readonly -nobrowse -noverify -mountpoint "$MNT" "$GPTK_DMG" >/dev/null
+    EVAL="$(find "$MNT" -maxdepth 1 -name 'Evaluation environment*.dmg' | head -1)"
+    [ -n "$EVAL" ] || { echo "no evaluation environment inside $GPTK_DMG" >&2; exit 1; }
+    hdiutil attach -readonly -nobrowse -noverify -mountpoint "$INNER" "$EVAL" >/dev/null
+    mkdir -p "$STAGE/lib/d3dmetal"
+    ditto "$INNER/redist/lib/external" "$STAGE/lib/d3dmetal/external"
+    ditto "$INNER/redist/lib/wine" "$STAGE/lib/d3dmetal/wine"
+    mkdir -p "$STAGE/licenses/d3dmetal"
+    cp "$INNER/License.rtf" "$INNER/Acknowledgements.rtf" "$STAGE/licenses/d3dmetal/"
+    cleanup; trap - EXIT
+fi
 for f in x86_64-unix/nvngx-on-metalfx.so x86_64-windows/nvngx-on-metalfx.dll; do
     [ -e "$STAGE/lib/d3dmetal/wine/$f" ] && mv "$STAGE/lib/d3dmetal/wine/$f" "$STAGE/lib/d3dmetal/wine/${f/nvngx-on-metalfx/nvngx}"
 done
