@@ -131,6 +131,7 @@ if otool -L "$STAGE"/lib/*.dylib "$STAGE"/lib/wine/x86_64-unix/*.so | grep -q "$
 fi
 cat > "$STAGE/VERSION" <<EOF
 name=$RUNTIME_NAME
+build=$RUNTIME_BUILD
 wine=$(cat "$SOURCES/sources/wine/VERSION")
 crossover_sources=$CX_VERSION
 d3dmetal=$D3DM_VERSION
