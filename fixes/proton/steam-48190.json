@@ -1,0 +1,13 @@
+{
+  "name": "Assassin's Creed: Brotherhood",
+  "match": {
+    "steam": [
+      48190
+    ]
+  },
+  "args": [
+    "-playoffline"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/48190.py"
+}

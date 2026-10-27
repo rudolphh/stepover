@@ -1,0 +1,14 @@
+{
+  "name": "Chronology",
+  "match": {
+    "steam": [
+      269330
+    ]
+  },
+  "components": [
+    "dotnet20",
+    "dotnet40"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/269330.py"
+}

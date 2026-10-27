@@ -1,0 +1,24 @@
+{
+  "name": "Serious Sam: The Random Encounter",
+  "match": {
+    "steam": [
+      201480
+    ]
+  },
+  "dlls": {
+    "streamci": "native"
+  },
+  "components": [
+    "dmband",
+    "dmime",
+    "dmloader",
+    "dmsynth",
+    "dmstyle",
+    "dmusic",
+    "dsound",
+    "dswave",
+    "directplay"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/201480.py"
+}

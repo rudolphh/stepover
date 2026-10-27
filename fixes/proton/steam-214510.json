@@ -1,0 +1,13 @@
+{
+  "name": "LEGO The Lord of the Rings",
+  "match": {
+    "steam": [
+      214510
+    ]
+  },
+  "components": [
+    "d3dx9_41"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/214510.py"
+}

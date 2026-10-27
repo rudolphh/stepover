@@ -1,0 +1,8 @@
+{
+  "name": "Red Dead Redemption 2",
+  "match": { "steam": [1174180], "exe": ["RDR2.exe"] },
+  "graphics": "d3dmetal",
+  "env": { "D3DM_ENABLE_METALFX": "1" },
+  "notes": "Use DirectX 12 (Vulkan is refused). With D3DM_ENABLE_METALFX the game's DLSS option becomes MetalFX upscaling; Balanced held 62 to 70 fps in camp at 3456x2160 on an M4 Max. Turn VSync off in the game.",
+  "source": "Tested with Stepover 0.1 on an M4 Max, October 2026"
+}

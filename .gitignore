@@ -6,3 +6,4 @@
 /app/.build/
 /release/dist/
 .DS_Store
+__pycache__/

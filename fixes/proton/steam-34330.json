@@ -1,0 +1,13 @@
+{
+  "name": "Total War: Shogun 2",
+  "match": {
+    "steam": [
+      34330
+    ]
+  },
+  "components": [
+    "d3dcompiler_43"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/34330.py"
+}

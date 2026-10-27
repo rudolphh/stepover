@@ -41,12 +41,15 @@ public struct Bottle: Hashable, Identifiable, Sendable {
         return config
     }
 
-    /// Writes stepover.json and the stepover-compat.conf the compat plug-in reads.
-    public func save(_ config: BottleConfig) throws {
+    /// Writes stepover.json and the stepover-compat.conf the compat plug-in reads, with the matched
+    /// fixes (so saving a setting while a game runs doesn't drop them). Pass `fixes` when already
+    /// known; otherwise this reads the fix list and scans the bottle.
+    public func save(_ config: BottleConfig, fixes: [MatchedFix]? = nil) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         try encoder.encode(config).write(to: configURL, options: .atomic)
-        try config.compatConf().write(to: compatURL, atomically: true, encoding: .utf8)
+        let matched = fixes ?? Launcher.matchedFixes(self, config: config)
+        try config.compatConf(fixes: matched).write(to: compatURL, atomically: true, encoding: .utf8)
     }
 
     public func runtime(_ config: BottleConfig) -> Runtime? { Runtime.resolve(config.runtime) }

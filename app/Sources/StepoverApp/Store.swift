@@ -17,12 +17,18 @@ final class Store: ObservableObject {
     /// The bundled manifest names a newer download than the installed runtime came from.
     @Published var runtimeUpdate = false
     @Published var hasCrossOver = !Importer.crossOverBottles().isEmpty
+    /// Fixes matching each bottle, including ones turned off there (the toggles show which).
+    @Published var fixCandidates: [String: [MatchedFix]] = [:]
+    @Published var showFixSources = false
+    /// Fixes skipped as invalid and flagged items left out, from the last load.
+    @Published var fixNotes: [String] = []
     let manifest = RuntimeManifest.bundled()
     private var icons: [String: NSImage] = [:]
     private var timer: Timer?
 
     init() {
         reload()
+        Task { _ = await FixLibrary.update(); refreshFixes() }  // quietly; offline just keeps the last copy
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refreshRunning() }
         }
@@ -37,6 +43,25 @@ final class Store: ObservableObject {
         runtimeUpdate = manifest.map { $0.isInstalled && !$0.isCurrent } ?? false
         if selection == nil || !bottles.contains(where: { $0.id == selection }) { selection = bottles.first?.id }
         refreshRunning()
+        refreshFixes()
+    }
+
+    func refreshFixes() {
+        let bottles = self.bottles, configs = self.configs
+        Task.detached {
+            let loaded = FixLibrary.load()
+            let fixes = loaded.fixes, notes = loaded.notes
+            var out: [String: [MatchedFix]] = [:]
+            for bottle in bottles {
+                var config = configs[bottle.id] ?? bottle.loadConfig()
+                config.fixes = true
+                config.disabledFixes = []
+                out[bottle.id] = config.matchedFixes(fixes, programs: Launcher.programNames(bottle, config: config),
+                                                     steamApps: SteamLibrary.apps(in: bottle))
+            }
+            let result = out
+            await MainActor.run { self.fixCandidates = result; self.fixNotes = notes }
+        }
     }
 
     func refreshRunning() {
@@ -49,7 +74,10 @@ final class Store: ObservableObject {
     func update(_ bottle: Bottle, _ change: (inout BottleConfig) -> Void) {
         var config = self.config(bottle)
         change(&config)
-        do { try bottle.save(config); configs[bottle.id] = config } catch { alert = error.localizedDescription }
+        // the fixes already matched for this bottle, so saving doesn't rescan the disk on the main thread
+        // (before the first scan finishes, save works them out itself)
+        let fixes = fixCandidates[bottle.id].map { config.fixes ? $0.filter { !config.disabledFixes.contains($0.fix.id) } : [] }
+        do { try bottle.save(config, fixes: fixes); configs[bottle.id] = config } catch { alert = error.localizedDescription }
     }
 
     func icon(for program: Program, in bottle: Bottle) -> NSImage? {
@@ -177,6 +205,48 @@ final class Store: ObservableObject {
                 }
             }
         }
+    }
+
+    // MARK: fixes
+
+    func setFix(_ id: String, on: Bool, in bottle: Bottle) {
+        update(bottle) { config in
+            config.disabledFixes.removeAll { $0 == id }
+            if !on { config.disabledFixes.append(id) }
+        }
+    }
+
+    func updateFixes() {
+        Task {
+            let report = await FixLibrary.update()
+            alert = "Fix list updated.\n" + report.joined(separator: "\n")
+            refreshFixes()
+        }
+    }
+
+    func openFixesFolder() {
+        try? FileManager.default.createDirectory(at: FixLibrary.localFolder, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(FixLibrary.localFolder)
+    }
+
+    func saveFix(_ program: Program, in bottle: Bottle) {
+        do {
+            let file = try FixLibrary.saveLocal(FixLibrary.fix(from: program, in: bottle))
+            NSWorkspace.shared.activateFileViewerSelecting([file])
+            refreshFixes()
+        } catch { alert = "Saving the fix failed: \(error.localizedDescription)" }
+    }
+
+    func shareFix(_ program: Program, in bottle: Bottle) {
+        if let url = FixLibrary.shareURL(for: FixLibrary.fix(from: program, in: bottle)) { NSWorkspace.shared.open(url) }
+    }
+
+    func report(_ program: Program, in bottle: Bottle) {
+        if let url = FixLibrary.reportURL(program: program, in: bottle) { NSWorkspace.shared.open(url) }
+    }
+
+    func openFixGuide() {
+        if let url = FixLibrary.guideURL { NSWorkspace.shared.open(url) }
     }
 
     func openLicenses() {

@@ -1,0 +1,13 @@
+{
+  "name": "DOOM Eternal",
+  "match": {
+    "steam": [
+      782330
+    ]
+  },
+  "args": [
+    "+com_skipSignInManager 1"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/782330.py"
+}

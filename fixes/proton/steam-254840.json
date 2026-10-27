@@ -1,0 +1,13 @@
+{
+  "name": "Ground Control 2",
+  "match": {
+    "steam": [
+      254840
+    ]
+  },
+  "components": [
+    "verdana"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/254840.py"
+}

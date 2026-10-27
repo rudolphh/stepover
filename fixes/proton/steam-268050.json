@@ -1,0 +1,11 @@
+{
+  "name": "The Evil Within(268050)",
+  "match": {
+    "steam": [
+      268050
+    ]
+  },
+  "windowsVersion": "win7",
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/268050.py"
+}

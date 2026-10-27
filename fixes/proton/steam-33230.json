@@ -1,0 +1,13 @@
+{
+  "name": "Assassin's Creed 2",
+  "match": {
+    "steam": [
+      33230
+    ]
+  },
+  "components": [
+    "ubisoftconnect"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/33230.py"
+}

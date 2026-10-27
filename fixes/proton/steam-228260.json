@@ -1,0 +1,21 @@
+{
+  "name": "Fallen Enchantress: Legendary Heroes",
+  "match": {
+    "steam": [
+      228260
+    ]
+  },
+  "dlls": {
+    "SDNXLFonts": "disabled"
+  },
+  "components": [
+    "usp10",
+    "vcrun2008",
+    "vcrun2015",
+    "d3dx9",
+    "d3dcompiler_43",
+    "d3dcompiler_47"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/228260.py"
+}

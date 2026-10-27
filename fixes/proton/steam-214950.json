@@ -1,0 +1,14 @@
+{
+  "name": "Total War: Rome II",
+  "match": {
+    "steam": [
+      214950
+    ]
+  },
+  "components": [
+    "d3dcompiler_42",
+    "directplay"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/214950.py"
+}

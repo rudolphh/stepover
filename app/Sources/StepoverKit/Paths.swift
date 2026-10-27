@@ -18,6 +18,8 @@ public enum Paths {
     public static var bottles: URL { url("STEPOVER_BOTTLES", default: root.appendingPathComponent("Bottles")) }
     /// STEPOVER_RUNTIMES, default <root>/Runtimes
     public static var runtimes: URL { url("STEPOVER_RUNTIMES", default: root.appendingPathComponent("Runtimes")) }
+    /// STEPOVER_FIXES, default <root>/Fixes (Local/ for your own fixes, Sources/ for downloaded lists)
+    public static var fixes: URL { url("STEPOVER_FIXES", default: root.appendingPathComponent("Fixes")) }
     /// STEPOVER_LOGS, default ~/Library/Logs/Stepover
     public static var logs: URL { url("STEPOVER_LOGS", default: home.appendingPathComponent("Library/Logs/Stepover")) }
     /// STEPOVER_LAUNCHERS, default ~/Applications/Stepover (the per-game Mac apps)

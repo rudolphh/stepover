@@ -1,0 +1,14 @@
+{
+  "name": "Catherine Classic",
+  "match": {
+    "steam": [
+      893180
+    ]
+  },
+  "components": [
+    "d3dcompiler_43",
+    "d3dcompiler_47"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/893180.py"
+}

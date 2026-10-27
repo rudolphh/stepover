@@ -1,0 +1,15 @@
+{
+  "name": "Pes 2021",
+  "match": {
+    "steam": [
+      1259970
+    ]
+  },
+  "components": [
+    "vcrun2019",
+    "allfonts",
+    "dotnet462"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1259970.py"
+}

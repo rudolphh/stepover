@@ -1,0 +1,13 @@
+{
+  "name": "Trackmania Turbo",
+  "match": {
+    "steam": [
+      375900
+    ]
+  },
+  "components": [
+    "ubisoftconnect"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/375900.py"
+}

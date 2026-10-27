@@ -1,0 +1,13 @@
+{
+  "name": "Age of Empires: DE",
+  "match": {
+    "steam": [
+      1017900
+    ]
+  },
+  "args": [
+    "-NoStartup"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1017900.py"
+}

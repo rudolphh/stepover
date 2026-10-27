@@ -1,0 +1,90 @@
+# Pull requests that add or change fixes in fixes/games/ are checked and merged automatically.
+# Security: pull_request_target runs this file and the checker from the base branch, never code from
+# the pull request; the pull request's fix files are only downloaded and read as data. A person
+# reviews anything else: other files, deletions, or fixes the checker flags (fixes/README.md, Safety).
+name: Fixes
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths: ["fixes/**"]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: fixes-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check-and-merge:
+    runs-on: macos-15
+    env:
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Check out the base branch (the pull request's code is never checked out)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Build the checker
+        run: swift build --package-path app --product stepover
+
+      - name: Download the changed fix files as data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pr"
+          auto=yes
+          count=0
+          gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | [.filename, .status, .raw_url] | @tsv' > "$RUNNER_TEMP/files.tsv"
+          while IFS=$'\t' read -r file status raw; do
+            count=$((count + 1))
+            case "$file" in
+              fixes/games/*.json) ;;
+              *) echo "$file isn't a fix in fixes/games/" >> "$RUNNER_TEMP/review.txt"; auto=no; continue ;;
+            esac
+            case "$status" in
+              added|modified) ;;
+              *) echo "$file was $status" >> "$RUNNER_TEMP/review.txt"; auto=no; continue ;;
+            esac
+            mkdir -p "$RUNNER_TEMP/pr/$(dirname "$file")"
+            curl -fsSL --max-filesize 102400 "$raw" -o "$RUNNER_TEMP/pr/$file"
+          done < "$RUNNER_TEMP/files.tsv"
+          if [ "$count" -gt 50 ]; then echo "more than 50 files" >> "$RUNNER_TEMP/review.txt"; auto=no; fi
+          echo "AUTO=$auto" >> "$GITHUB_ENV"
+
+      - name: Check the fixes
+        run: |
+          set +e
+          if [ -d "$RUNNER_TEMP/pr/fixes" ]; then
+            app/.build/debug/stepover fixes check "$RUNNER_TEMP/pr/fixes" > "$RUNNER_TEMP/check.txt" 2>&1
+            status=$?
+          else
+            echo "no fix files to check" > "$RUNNER_TEMP/check.txt"; status=0
+          fi
+          cat "$RUNNER_TEMP/check.txt"
+          echo "CHECK=$status" >> "$GITHUB_ENV"
+
+      - name: Merge, or leave a note for a person
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # The checker's output repeats text from the pull request: strip backticks and @ so it
+          # stays inside the code block and mentions no one.
+          note() { { echo "$1"; echo; echo '```'; cat "$RUNNER_TEMP/check.txt" "$RUNNER_TEMP/review.txt" 2>/dev/null | tr '`@' "'_"; echo '```'; } > "$RUNNER_TEMP/comment.md"
+                   gh pr comment "$PR" --repo "$REPO" --body-file "$RUNNER_TEMP/comment.md"; }
+          if [ "$CHECK" = 0 ] && [ "$AUTO" = yes ]; then
+            gh pr merge "$PR" --repo "$REPO" --squash --match-head-commit "$HEAD_SHA"
+          elif [ "$CHECK" = 0 ] || [ "$CHECK" = 2 ]; then
+            note "Thanks! This one needs a person to look at it (flagged items, or files outside fixes/games/); see fixes/README.md, Safety."
+          else
+            note "The fix check found problems (exit $CHECK); please fix them and push again (format: fixes/README.md)."
+            exit 1
+          fi

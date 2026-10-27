@@ -1,0 +1,13 @@
+{
+  "name": "The Lord of the Rings Online",
+  "match": {
+    "steam": [
+      212500
+    ]
+  },
+  "dlls": {
+    "libglesv2": "disabled"
+  },
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/212500.py"
+}

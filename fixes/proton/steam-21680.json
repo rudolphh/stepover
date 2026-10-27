@@ -1,0 +1,13 @@
+{
+  "name": "Bionic Commander Rearmed",
+  "match": {
+    "steam": [
+      21680
+    ]
+  },
+  "components": [
+    "physx"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/21680.py"
+}

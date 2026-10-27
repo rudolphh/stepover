@@ -1,0 +1,13 @@
+{
+  "name": "Anno 1800",
+  "match": {
+    "steam": [
+      916440
+    ]
+  },
+  "components": [
+    "ubisoftconnect"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/916440.py"
+}

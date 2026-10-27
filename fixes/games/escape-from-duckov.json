@@ -1,0 +1,7 @@
+{
+  "name": "Escape from Duckov",
+  "match": { "steam": [3167020], "exe": ["Duckov.exe"] },
+  "graphics": "d3dmetal",
+  "notes": "Runs well on D3DMetal: about 98 fps at the menu on an M4 Max.",
+  "source": "Tested with Stepover 0.1 on an M4 Max, October 2026"
+}

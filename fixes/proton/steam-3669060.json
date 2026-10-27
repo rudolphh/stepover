@@ -1,0 +1,13 @@
+{
+  "name": "Blade & Soul NEO",
+  "match": {
+    "steam": [
+      3669060
+    ]
+  },
+  "components": [
+    "dotnet48"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/3669060.py"
+}

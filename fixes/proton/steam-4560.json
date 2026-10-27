@@ -1,0 +1,13 @@
+{
+  "name": "Transformers: War for Cybertron",
+  "match": {
+    "steam": [
+      4560
+    ]
+  },
+  "components": [
+    "physx"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/4560.py"
+}

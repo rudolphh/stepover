@@ -1,0 +1,13 @@
+{
+  "name": "Ship Graveyard Simulator Prologue",
+  "match": {
+    "steam": [
+      1664350
+    ]
+  },
+  "dlls": {
+    "vulkan-1": "builtin"
+  },
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1664350.py"
+}

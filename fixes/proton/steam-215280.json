@@ -1,0 +1,15 @@
+{
+  "name": "Secret World Legends",
+  "match": {
+    "steam": [
+      215280
+    ]
+  },
+  "components": [
+    "d3dx9_43",
+    "d3dx11_43",
+    "d3dcompiler_43"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/215280.py"
+}

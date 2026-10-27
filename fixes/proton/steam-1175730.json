@@ -1,0 +1,15 @@
+{
+  "name": "Tree Of Savior",
+  "match": {
+    "steam": [
+      1175730
+    ]
+  },
+  "components": [
+    "d3dcompiler_47",
+    "vcrun2013",
+    "vcrun2022"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1175730.py"
+}

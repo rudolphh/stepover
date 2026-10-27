@@ -1,0 +1,13 @@
+{
+  "name": "Halo:MCC",
+  "match": {
+    "steam": [
+      976730
+    ]
+  },
+  "components": [
+    "vcrun2019"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/976730.py"
+}

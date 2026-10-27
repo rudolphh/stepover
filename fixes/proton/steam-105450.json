@@ -1,0 +1,16 @@
+{
+  "name": "Age Of Empire 3: Complete Collection",
+  "match": {
+    "steam": [
+      105450
+    ]
+  },
+  "components": [
+    "mfc42",
+    "l3codecx",
+    "corefonts"
+  ],
+  "windowsVersion": "winxp",
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/105450.py"
+}

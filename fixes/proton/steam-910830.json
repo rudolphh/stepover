@@ -1,0 +1,13 @@
+{
+  "name": "Rebel Galaxy Outlaw",
+  "match": {
+    "steam": [
+      910830
+    ]
+  },
+  "components": [
+    "mfc42"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/910830.py"
+}

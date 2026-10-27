@@ -1,0 +1,14 @@
+{
+  "name": "Re-Volt (287310)",
+  "match": {
+    "steam": [
+      287310
+    ]
+  },
+  "dlls": {
+    "ddraw": "native",
+    "dinput": "native"
+  },
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/287310.py"
+}

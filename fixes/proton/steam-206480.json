@@ -1,0 +1,13 @@
+{
+  "name": "Dungeons & Dragons Online",
+  "match": {
+    "steam": [
+      206480
+    ]
+  },
+  "dlls": {
+    "libglesv2": "disabled"
+  },
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/206480.py"
+}

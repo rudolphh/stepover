@@ -1,0 +1,13 @@
+{
+  "name": "Exo One",
+  "match": {
+    "steam": [
+      773370
+    ]
+  },
+  "components": [
+    "d3dcompiler_47"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/773370.py"
+}

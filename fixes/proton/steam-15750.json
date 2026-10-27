@@ -1,0 +1,13 @@
+{
+  "name": "Oddworld: Stranger's Wrath HD",
+  "match": {
+    "steam": [
+      15750
+    ]
+  },
+  "components": [
+    "mfc90"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/15750.py"
+}

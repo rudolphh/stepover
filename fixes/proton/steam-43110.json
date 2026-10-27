@@ -1,0 +1,13 @@
+{
+  "name": "Metro 2033",
+  "match": {
+    "steam": [
+      43110
+    ]
+  },
+  "components": [
+    "d3dcompiler_42"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/43110.py"
+}

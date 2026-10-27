@@ -1,0 +1,13 @@
+{
+  "name": "The Callisto Protocol",
+  "match": {
+    "steam": [
+      1544020
+    ]
+  },
+  "components": [
+    "vcrun2022"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1544020.py"
+}

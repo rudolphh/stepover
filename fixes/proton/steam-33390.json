@@ -1,0 +1,13 @@
+{
+  "name": "Zeit²",
+  "match": {
+    "steam": [
+      33390
+    ]
+  },
+  "components": [
+    "dotnet48"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/33390.py"
+}

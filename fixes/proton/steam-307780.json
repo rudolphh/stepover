@@ -1,0 +1,13 @@
+{
+  "name": "Mortal Kombat X",
+  "match": {
+    "steam": [
+      307780
+    ]
+  },
+  "components": [
+    "xact_x64"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/307780.py"
+}

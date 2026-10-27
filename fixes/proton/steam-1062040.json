@@ -1,0 +1,13 @@
+{
+  "name": "Dragon Star Varnir",
+  "match": {
+    "steam": [
+      1062040
+    ]
+  },
+  "dlls": {
+    "xactengine3_7": "native"
+  },
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1062040.py"
+}

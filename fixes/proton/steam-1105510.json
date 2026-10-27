@@ -1,0 +1,13 @@
+{
+  "name": "Yakuza 5",
+  "match": {
+    "steam": [
+      1105510
+    ]
+  },
+  "env": {
+    "WINE_DISABLE_SFN": "1"
+  },
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1105510.py"
+}

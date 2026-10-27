@@ -1,0 +1,13 @@
+{
+  "name": "Company Of Heroes 2",
+  "match": {
+    "steam": [
+      231430
+    ]
+  },
+  "components": [
+    "ucrtbase2019"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/231430.py"
+}

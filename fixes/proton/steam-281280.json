@@ -1,0 +1,14 @@
+{
+  "name": "Mashed(281280)",
+  "match": {
+    "steam": [
+      281280
+    ]
+  },
+  "args": [
+    "-VS0 -CS0"
+  ],
+  "windowsVersion": "winxp",
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/281280.py"
+}

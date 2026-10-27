@@ -1,0 +1,14 @@
+{
+  "name": "Borderlands 3",
+  "match": {
+    "steam": [
+      397540
+    ]
+  },
+  "components": [
+    "d3dcompiler_47",
+    "vcrun2022"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/397540.py"
+}

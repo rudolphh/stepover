@@ -1,0 +1,13 @@
+{
+  "name": "Dragon's Dogma: Dark Arisen",
+  "match": {
+    "steam": [
+      367500
+    ]
+  },
+  "env": {
+    "SDL_JOYSTICK_HIDAPI": "0"
+  },
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/367500.py"
+}

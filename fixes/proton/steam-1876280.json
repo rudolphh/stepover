@@ -1,0 +1,13 @@
+{
+  "name": "PAIcom",
+  "match": {
+    "steam": [
+      1876280
+    ]
+  },
+  "components": [
+    "dotnet48"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1876280.py"
+}

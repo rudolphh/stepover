@@ -1,0 +1,13 @@
+{
+  "name": "Ducati World Championship",
+  "match": {
+    "steam": [
+      6270
+    ]
+  },
+  "components": [
+    "icodecs"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/6270.py"
+}

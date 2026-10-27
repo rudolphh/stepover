@@ -1,0 +1,14 @@
+{
+  "name": "Hardwar",
+  "match": {
+    "steam": [
+      1500540
+    ]
+  },
+  "dlls": {
+    "dinput": "native,builtin",
+    "winmm": "native,builtin"
+  },
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1500540.py"
+}

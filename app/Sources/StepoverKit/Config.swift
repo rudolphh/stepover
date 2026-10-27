@@ -94,6 +94,15 @@ public struct BottleConfig: Codable, Sendable {
     public var setupInf: String?
     /// Apply BuiltInFixes beneath this bottle's rules (default true; false turns them all off).
     public var builtInFixes = true
+    /// Apply fixes from the fix list (official, added sources, your own); default true.
+    public var fixes = true
+    /// Fix ids (FixLibrary "<source>/<file>") turned off for this bottle.
+    public var disabledFixes: [String] = []
+    /// Registry values from fixes already written into this bottle ("<key>\<name>=<value>").
+    public var appliedRegistry: [String] = []
+    /// Components a fix asked for that winetricks failed to install; not retried automatically
+    /// (installing one from Components tries again).
+    public var failedComponents: [String] = []
 
     public init(runtime: String? = nil, graphics: Backend = .d3dmetal, env: [String: String] = [:],
                 programs: [Program] = [], processes: [String: ProcessRule] = [:], origin: String? = nil) {
@@ -111,6 +120,10 @@ public struct BottleConfig: Codable, Sendable {
         origin = try c.decodeIfPresent(String.self, forKey: .origin)
         setupInf = try c.decodeIfPresent(String.self, forKey: .setupInf)
         builtInFixes = try c.decodeIfPresent(Bool.self, forKey: .builtInFixes) ?? true
+        fixes = try c.decodeIfPresent(Bool.self, forKey: .fixes) ?? true
+        disabledFixes = try c.decodeIfPresent([String].self, forKey: .disabledFixes) ?? []
+        appliedRegistry = try c.decodeIfPresent([String].self, forKey: .appliedRegistry) ?? []
+        failedComponents = try c.decodeIfPresent([String].self, forKey: .failedComponents) ?? []
     }
 
     /// The backend a program ends up with.
@@ -124,33 +137,135 @@ public struct BottleConfig: Codable, Sendable {
     }
 
     /// The text of stepover-compat.conf, which the compat plug-in reads in every Wine process.
-    public func compatConf() -> String {
-        var out = "# Written by Stepover from stepover.json; edit that file (or use the app) instead.\n\n[*]\nbackend = \(graphics.rawValue)\n"
-        var sections: [String: (Backend?, [String: String], [String])] = [:]
-        for fix in builtInFixes ? BuiltInFixes.all : [] {
-            sections[fix.exe.lowercased()] = (fix.rule.graphics, fix.rule.env, fix.rule.args)
+    /// One program's settings in stepover-compat.conf; later layers win over earlier ones.
+    struct Section {
+        var backend: Backend?
+        var env: [String: String] = [:]
+        var dlls: [String: String] = [:]
+        var args: [String] = []
+
+        mutating func layer(backend: Backend?, env: [String: String] = [:], dlls: [String: String] = [:], args: [String] = []) {
+            self.backend = backend ?? self.backend
+            self.env.merge(env) { _, new in new }
+            self.dlls.merge(dlls) { _, new in new }
+            self.args += args.filter { !self.args.contains($0) }
         }
+    }
+
+    /// The text of stepover-compat.conf, which the compat plug-in reads in every Wine process.
+    /// Layers, lowest first: built-in fixes, matched community fixes, programs, the bottle's rules.
+    public func compatConf(fixes: [MatchedFix] = []) -> String {
+        var out = "# Written by Stepover from stepover.json; edit that file (or use the app) instead.\n\n[*]\nbackend = \(graphics.rawValue)\n"
+        var sections: [String: Section] = [:]
+        for fix in builtInFixes ? BuiltInFixes.all : [] {
+            sections[fix.exe.asciiLowercased, default: Section()].layer(backend: fix.rule.graphics, env: fix.rule.env, args: fix.rule.args)
+        }
+        // The bottle's own environment and DLL overrides reach every process from the launcher; a fix
+        // must not override them (the plug-in's settings would).
+        let bottleDlls = Self.overriddenDlls(env["WINEDLLOVERRIDES"])
+        for matched in fixes {
+            let fix = matched.fix
+            let fixEnv = fix.env.filter { env[$0.key] == nil }
+            let fixDlls = fix.dlls.filter { !bottleDlls.contains($0.key.asciiLowercased) }
+            for key in matched.programs {
+                sections[key, default: Section()].layer(backend: fix.graphics.flatMap(Backend.init(rawValue:)), env: fixEnv, dlls: fixDlls)
+            }
+            for key in matched.argPrograms { sections[key, default: Section()].layer(backend: nil, args: fix.args) }
+        }
+        // The user's own rules, by file name
+        var user: [String: Section] = [:]
         for program in programs {
-            let key = program.exeName.lowercased()
-            let existing = sections[key]
-            sections[key] = (program.graphics ?? existing?.0, (existing?.1 ?? [:]).merging(program.env) { _, new in new },
-                             existing?.2 ?? [])
+            user[program.exeName.asciiLowercased, default: Section()].layer(backend: program.graphics, env: program.env)
         }
         for (exe, rule) in processes {
-            let key = exe.lowercased()
-            let existing = sections[key]
-            let args = existing?.2 ?? []
-            sections[key] = (rule.graphics ?? existing?.0, (existing?.1 ?? [:]).merging(rule.env) { _, new in new },
-                             args + rule.args.filter { !args.contains($0) })
+            user[exe.asciiLowercased, default: Section()].layer(backend: rule.graphics, env: rule.env, args: rule.args)
         }
-        for key in sections.keys.sorted() {
-            let (backend, env, args) = sections[key]!
+        for (key, rule) in user {
+            let mine = Self.overriddenDlls(rule.env["WINEDLLOVERRIDES"])
+            sections[key, default: Section()].dlls = (sections[key]?.dlls ?? [:]).filter { !mine.contains($0.key.asciiLowercased) }
+            sections[key]!.layer(backend: rule.backend, env: rule.env, dlls: rule.dlls, args: rule.args)
+        }
+        // A Steam fix's section is named by the game's full path. The plug-in applies every matching
+        // section in file order, so full paths go last and also carry the user's rules for that file
+        // name: the user's settings win either way.
+        for key in sections.keys where key.contains("\\") {
+            let fileName = String(key.split(separator: "\\").last ?? "")
+            guard let rule = user[fileName] else { continue }
+            let mine = Self.overriddenDlls(rule.env["WINEDLLOVERRIDES"])
+            sections[key]!.dlls = sections[key]!.dlls.filter { !mine.contains($0.key.asciiLowercased) }
+            sections[key]!.layer(backend: rule.backend, env: rule.env, dlls: rule.dlls, args: rule.args)
+        }
+        // Section names come from fixes, Steam folders and the user; one that could close the
+        // section header or start new lines is left out instead of written.
+        let ordered = sections.keys.filter { !$0.contains("\\") }.sorted() + sections.keys.filter { $0.contains("\\") }.sorted()
+        for key in ordered where Self.isSectionName(key) {
+            let section = sections[key]!
             out += "\n[\(key)]\n"
-            out += "backend = \((backend ?? graphics).rawValue)\n"
-            for name in env.keys.sorted() { out += "env = \(name)=\(env[name]!)\n" }
+            out += "backend = \((section.backend ?? graphics).rawValue)\n"
+            for name in section.env.keys.sorted() where Self.isOneLine(name + section.env[name]!) {
+                out += "env = \(name)=\(section.env[name]!)\n"
+            }
+            for dll in section.dlls.keys.sorted() { out += "dll = \(Fix.wineOverride(dll, section.dlls[dll]!))\n" }
             // appended as raw text to the command line; a line break would start a new INI line
-            for arg in args where !arg.contains(where: \.isNewline) { out += "args = \(arg)\n" }
+            for arg in section.args where Self.isOneLine(arg) { out += "args = \(arg)\n" }
         }
         return out
+    }
+
+    static func isOneLine(_ s: String) -> Bool { !s.contains { $0.isNewline || ($0.asciiValue.map { $0 < 0x20 } ?? false) } }
+
+    static func isSectionName(_ key: String) -> Bool {
+        !key.isEmpty && key != "*" && isOneLine(key) && !key.contains("[") && !key.contains("]")
+    }
+
+    /// DLL names in a WINEDLLOVERRIDES value ("d3d9,ddraw=n,b;dinput8=d").
+    static func overriddenDlls(_ value: String?) -> Set<String> {
+        guard let value else { return [] }
+        var out = Set<String>()
+        for entry in value.split(separator: ";") {
+            for name in (entry.split(separator: "=", maxSplits: 1).first ?? "").split(separator: ",") {
+                var dll = name.trimmingCharacters(in: .whitespaces).asciiLowercased
+                if dll.hasSuffix(".dll") { dll.removeLast(4) }
+                out.insert(dll)
+            }
+        }
+        return out
+    }
+
+    /// Which of `fixes` apply here: those whose game is found, by Steam install or by program file.
+    /// `programs`: lowercased program file names in the bottle (Launcher.programNames);
+    /// `steamApps`: games installed through Steam in it.
+    public func matchedFixes(_ fixes: [Fix], programs: Set<String>, steamApps: [SteamApp]) -> [MatchedFix] {
+        guard self.fixes else { return [] }
+        var out: [MatchedFix] = []
+        var claimedSteam = Set<Int>(), claimedExes = Set<String>()
+        // One fix per game: `fixes` come in load order (official converted, official hand-written,
+        // added sources, your own), and the last one for a Steam ID or program name wins. A fix
+        // turned off still claims its game, so an older one doesn't take its place.
+        for fix in fixes.reversed() {
+            let exes = fix.match.exe.map(\.asciiLowercased)
+            let installed = steamApps.filter { fix.match.steam.contains($0.id) }
+            let found = exes.filter(programs.contains)
+            guard !installed.isEmpty || !found.isEmpty else { continue }
+            if !claimedSteam.isDisjoint(with: fix.match.steam) || !claimedExes.isDisjoint(with: exes) { continue }
+            claimedSteam.formUnion(fix.match.steam)
+            claimedExes.formUnion(exes)
+            guard !disabledFixes.contains(fix.id) else { continue }
+
+            // Steam games: settings go to the game's own files by full path, so a generic name such as
+            // launcher.exe in one game doesn't pick up another game's fix.
+            var keys: [String] = [], argKeys: [String] = []
+            for app in installed {
+                let all = app.programs(), top = Set(app.topPrograms())
+                let chosen = exes.isEmpty ? all : all.filter { exes.contains($0.lastPathComponent.asciiLowercased) }
+                keys += chosen.map(app.windowsKey)
+                argKeys += (exes.isEmpty ? chosen.filter(top.contains) : chosen).map(app.windowsKey)
+            }
+            keys += found
+            argKeys += found
+            guard !keys.isEmpty else { continue }
+            out.append(MatchedFix(fix: fix, programs: Array(Set(keys)).sorted(), argPrograms: Array(Set(argKeys)).sorted()))
+        }
+        return out.reversed()
     }
 }

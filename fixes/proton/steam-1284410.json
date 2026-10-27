@@ -1,0 +1,13 @@
+{
+  "name": "GWENT: The Witcher Card Game",
+  "match": {
+    "steam": [
+      1284410
+    ]
+  },
+  "components": [
+    "mfc140"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1284410.py"
+}

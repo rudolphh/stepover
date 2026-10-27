@@ -1,0 +1,13 @@
+{
+  "name": "LEGO Batman 2: DC Super Heroes",
+  "match": {
+    "steam": [
+      213330
+    ]
+  },
+  "components": [
+    "d3dx9_41"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/213330.py"
+}

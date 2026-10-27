@@ -1,0 +1,13 @@
+{
+  "name": "Plain Sight",
+  "match": {
+    "steam": [
+      49900
+    ]
+  },
+  "components": [
+    "xna31"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/49900.py"
+}

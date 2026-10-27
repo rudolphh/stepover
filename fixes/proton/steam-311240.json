@@ -1,0 +1,13 @@
+{
+  "name": "Zero Escape: Zero Time Dilemma",
+  "match": {
+    "steam": [
+      311240
+    ]
+  },
+  "dlls": {
+    "libglesv2": "disabled"
+  },
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/311240.py"
+}

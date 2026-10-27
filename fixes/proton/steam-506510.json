@@ -1,0 +1,13 @@
+{
+  "name": "Shadows of Adam",
+  "match": {
+    "steam": [
+      506510
+    ]
+  },
+  "dlls": {
+    "dcomp": "disabled"
+  },
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/506510.py"
+}

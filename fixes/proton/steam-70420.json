@@ -1,0 +1,21 @@
+{
+  "name": "Chantelise - A Tale of Two Sisters",
+  "match": {
+    "steam": [
+      70420
+    ]
+  },
+  "dlls": {
+    "streamci": "native"
+  },
+  "components": [
+    "dmime",
+    "dmloader",
+    "dmsynth",
+    "dmusic",
+    "dsound",
+    "dswave"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/70420.py"
+}

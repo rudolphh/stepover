@@ -1,0 +1,14 @@
+{
+  "name": "Marvel's Avengers",
+  "match": {
+    "steam": [
+      997070
+    ]
+  },
+  "components": [
+    "vcrun2019",
+    "d3dcompiler_47"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/997070.py"
+}

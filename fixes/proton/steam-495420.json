@@ -1,0 +1,14 @@
+{
+  "name": "State of Decay 2",
+  "match": {
+    "steam": [
+      495420
+    ]
+  },
+  "components": [
+    "d3dcompiler_47"
+  ],
+  "windowsVersion": "win7",
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/495420.py"
+}

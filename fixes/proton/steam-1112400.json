@@ -1,0 +1,15 @@
+{
+  "name": "Project Torque",
+  "match": {
+    "steam": [
+      1112400
+    ]
+  },
+  "components": [
+    "dotnet35sp1",
+    "dotnet40"
+  ],
+  "windowsVersion": "win10",
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1112400.py"
+}

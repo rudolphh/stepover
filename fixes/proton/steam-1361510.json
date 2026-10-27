@@ -1,0 +1,13 @@
+{
+  "name": "Teenage Mutant Ninja Turtles Shredders Revenge",
+  "match": {
+    "steam": [
+      1361510
+    ]
+  },
+  "components": [
+    "vcrun2017"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1361510.py"
+}

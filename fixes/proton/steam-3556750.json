@@ -1,0 +1,13 @@
+{
+  "name": "Warhammer 40,000: Dawn of War - Definitive Edition",
+  "match": {
+    "steam": [
+      3556750
+    ]
+  },
+  "components": [
+    "ucrtbase2019"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/3556750.py"
+}

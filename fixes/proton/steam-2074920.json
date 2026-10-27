@@ -1,0 +1,13 @@
+{
+  "name": "The First Descendant",
+  "match": {
+    "steam": [
+      2074920
+    ]
+  },
+  "env": {
+    "WINE_BLOCK_HOSTS": "modules-cdn.eac-prod.on.epicgames.com"
+  },
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/2074920.py"
+}

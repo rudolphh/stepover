@@ -1,0 +1,13 @@
+{
+  "name": "Forza Horizon 4",
+  "match": {
+    "steam": [
+      1293830
+    ]
+  },
+  "components": [
+    "vcrun2019"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1293830.py"
+}

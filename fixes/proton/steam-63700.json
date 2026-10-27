@@ -1,0 +1,14 @@
+{
+  "name": "BIT.TRIP BEAT",
+  "match": {
+    "steam": [
+      63700
+    ]
+  },
+  "components": [
+    "d3dcompiler_43",
+    "d3dx9_43"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/63700.py"
+}

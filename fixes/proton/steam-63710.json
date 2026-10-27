@@ -1,0 +1,19 @@
+{
+  "name": "BIT.TRIP RUNNER",
+  "match": {
+    "steam": [
+      63710
+    ]
+  },
+  "dlls": {
+    "d3dx9_43": "native",
+    "d3dcompiler_43": "native"
+  },
+  "components": [
+    "openal",
+    "d3dcompiler_43",
+    "d3dx9_43"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/63710.py"
+}

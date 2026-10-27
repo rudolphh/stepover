@@ -1,0 +1,14 @@
+{
+  "name": "JR East Train Simulator",
+  "match": {
+    "steam": [
+      2111630
+    ]
+  },
+  "components": [
+    "d3dcompiler_43",
+    "vcrun2008"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/2111630.py"
+}

@@ -1,5 +1,13 @@
 import Foundation
 
+extension String {
+    /// Lowercased in A-Z only, the way the compat plug-in compares program names and paths
+    /// (lowercased() would also change other letters, which the plug-in leaves as they are).
+    public var asciiLowercased: String {
+        String(unicodeScalars.map { ("A"..."Z").contains($0) ? Character(Unicode.Scalar($0.value + 32)!) : Character($0) })
+    }
+}
+
 /// Windows <-> Mac path conversion through a bottle's dosdevices folder.
 public enum WindowsPath {
     public static func fileName(_ path: String) -> String {

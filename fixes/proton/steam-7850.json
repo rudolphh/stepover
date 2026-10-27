@@ -1,0 +1,13 @@
+{
+  "name": "Cryostasis",
+  "match": {
+    "steam": [
+      7850
+    ]
+  },
+  "components": [
+    "physx"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/7850.py"
+}

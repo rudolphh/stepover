@@ -1,0 +1,13 @@
+{
+  "name": "Order of Battle: World War II",
+  "match": {
+    "steam": [
+      312450
+    ]
+  },
+  "components": [
+    "corefonts"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/312450.py"
+}

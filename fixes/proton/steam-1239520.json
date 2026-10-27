@@ -1,0 +1,13 @@
+{
+  "name": "Madden NFL 21 needs vcrun2019 for online mode to work",
+  "match": {
+    "steam": [
+      1239520
+    ]
+  },
+  "components": [
+    "vcrun2019"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1239520.py"
+}

@@ -1,0 +1,14 @@
+{
+  "name": "STAR WARS Galactic Battlegrounds Saga",
+  "match": {
+    "steam": [
+      356500
+    ]
+  },
+  "components": [
+    "icodecs",
+    "directplay"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/356500.py"
+}

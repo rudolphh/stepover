@@ -30,12 +30,14 @@ public enum Launcher {
     /// Puts bottle-side files in place before a launch: the compat file, and D3DMetal's nvngx/nvapi64
     /// in system32 when MetalFX is on (Apple's Read Me; CrossOver redirects these instead).
     public static func prepare(bottle: Bottle, config: BottleConfig, runtime: Runtime) throws {
-        try config.compatConf().write(to: bottle.compatURL, atomically: true, encoding: .utf8)
+        let fixes = matchedFixes(bottle, config: config)
+        try config.compatConf(fixes: fixes).write(to: bottle.compatURL, atomically: true, encoding: .utf8)
         try FileManager.default.createDirectory(at: Paths.logs, withIntermediateDirectories: true)
 
         let metalFX = config.env["D3DM_ENABLE_METALFX"] == "1"
             || config.programs.contains { $0.env["D3DM_ENABLE_METALFX"] == "1" && config.backend(for: $0) == .d3dmetal }
             || config.processes.values.contains { $0.env["D3DM_ENABLE_METALFX"] == "1" }
+            || fixes.contains { $0.fix.env["D3DM_ENABLE_METALFX"] == "1" && config.env["D3DM_ENABLE_METALFX"] == nil }
         guard metalFX else { return }
         let system32 = bottle.cDrive.appendingPathComponent("windows/system32")
         for dll in ["nvngx.dll", "nvapi64.dll"] {
@@ -98,6 +100,7 @@ public enum Launcher {
             throw StepoverError.message("\(program.name): \(program.exe) does not exist in \(bottle.name)")
         }
         let workdir = program.workdir.flatMap { WindowsPath.toMac($0, bottle: bottle) } ?? exe.deletingLastPathComponent()
+        applyFixes(bottle)
         appendLog(bottle, "launching \(program.name): \(program.exe) \(program.args.joined(separator: " "))")
         return try wine([program.exe] + program.args + extraArgs, bottle: bottle, program: program,
                         workdir: workdir, wait: wait, output: output)

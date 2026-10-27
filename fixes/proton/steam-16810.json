@@ -1,0 +1,14 @@
+{
+  "name": "Civilization IV: Colonization",
+  "match": {
+    "steam": [
+      16810
+    ]
+  },
+  "components": [
+    "msxml3",
+    "corefonts"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/16810.py"
+}

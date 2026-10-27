@@ -19,6 +19,13 @@ struct StepoverApp: App {
             CommandGroup(after: .newItem) {
                 Button("Reload Bottles") { store.reload() }.keyboardShortcut("r")
             }
+            CommandMenu("Fixes") {
+                Button("Update Fixes") { store.updateFixes() }
+                Button("Open My Fixes Folder") { store.openFixesFolder() }
+                Button("Fix Sources…") { store.showFixSources = true }
+                Divider()
+                Button("How to Add a Fix") { store.openFixGuide() }
+            }
             CommandGroup(replacing: .help) {
                 Button("Licenses and Notices") { store.openLicenses() }
                 Button("Stepover Source Code") { store.openSource() }
@@ -90,6 +97,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showImport) { ImportSheet() }
         .sheet(isPresented: $showCreate) { CreateSheet() }
+        .sheet(isPresented: $store.showFixSources) { FixSourcesSheet() }
     }
 }
 
@@ -176,6 +184,38 @@ struct BottleView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
+            Section {
+                Toggle("Apply fixes from the fix list", isOn: Binding(get: { config.fixes },
+                                                                      set: { value in store.update(bottle) { $0.fixes = value } }))
+                if config.fixes {
+                    let candidates = store.fixCandidates[bottle.id] ?? []
+                    if candidates.isEmpty {
+                        Text("No fixes match the programs or Steam games in this bottle.").foregroundStyle(.secondary)
+                    }
+                    ForEach(candidates, id: \.fix.id) { matched in
+                        Toggle(isOn: Binding(get: { !config.disabledFixes.contains(matched.fix.id) },
+                                             set: { store.setFix(matched.fix.id, on: $0, in: bottle) })) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(matched.fix.name)
+                                Text(fixSummary(matched)).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .help(matched.fix.id)
+                    }
+                }
+            } header: {
+                Text("Fixes")
+            } footer: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("From the official list, sources you add and your own folder (Fixes menu); one fix per game, your own winning. Components and registry values install the next time Stepover starts a program here.")
+                    if !store.fixNotes.isEmpty {
+                        Text("\(store.fixNotes.count) fix item(s) were skipped or left out for safety; `stepover fixes` lists them.")
+                            .help(store.fixNotes.prefix(20).joined(separator: "\n"))
+                    }
+                }
+                .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Environment") {
                 EnvironmentEditor(env: config.env) { env in store.update(bottle) { $0.env = env } }
             }
@@ -260,6 +300,10 @@ struct ProgramRow: View {
                     if let url = WindowsPath.toMac(program.exe, bottle: bottle) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
                 }
                 Divider()
+                Button("Save Settings as My Fix") { store.saveFix(program, in: bottle) }
+                Button("Share Fix on GitHub…") { store.shareFix(program, in: bottle) }
+                Button("Report How It Ran…") { store.report(program, in: bottle) }
+                Divider()
                 Button("Remove from List", role: .destructive) {
                     store.update(bottle) { $0.programs.removeAll { $0.name == program.name } }
                 }
@@ -281,6 +325,76 @@ struct ProgramRow: View {
         let pick = GraphicsPicker.pick(exe: exe)
         set { p in p.graphics = pick.backend; p.env.merge(pick.env) { _, new in new } }
         store.alert = "\(program.name): \(pick.backend.label). \(pick.reason)."
+    }
+}
+
+/// One line about what a fix does, for the bottle's Fixes list.
+func fixSummary(_ matched: MatchedFix) -> String {
+    let fix = matched.fix
+    var parts: [String] = []
+    if let graphics = fix.graphics, let backend = Backend(rawValue: graphics) { parts.append(backend.label) }
+    if !fix.components.isEmpty { parts.append(fix.components.joined(separator: ", ")) }
+    if !fix.dlls.isEmpty { parts.append("DLLs: " + fix.dlls.keys.sorted().joined(separator: ", ")) }
+    if !fix.env.isEmpty { parts.append(fix.env.keys.sorted().joined(separator: ", ")) }
+    if !fix.args.isEmpty { parts.append(fix.args.joined(separator: " ")) }
+    if !fix.registry.isEmpty { parts.append("\(fix.registry.count) registry value(s)") }
+    var line = parts.joined(separator: " · ")
+    if let notes = fix.notes, !notes.isEmpty { line += (line.isEmpty ? "" : ". ") + notes }
+    return line
+}
+
+struct FixSourcesSheet: View {
+    @EnvironmentObject var store: Store
+    @Environment(\.dismiss) private var dismiss
+    @State private var sources = FixLibrary.addedSources()
+    @State private var name = ""
+    @State private var url = ""
+    @State private var trusted = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Fix Sources").font(.title2.bold())
+            Text("Anyone can publish a fix list: a GitHub repository with a fixes folder (github:owner/repo) or a link to a JSON file. Flagged items (ones that could run commands) are left out unless you trust the source. Your own fixes folder always applies as written.")
+                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            List {
+                HStack { Text("official").bold(); Text(FixLibrary.official.url).foregroundStyle(.secondary) }
+                ForEach(sources, id: \.name) { source in
+                    HStack {
+                        Text(source.name).bold()
+                        Text(source.url).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        Spacer()
+                        Toggle("Trusted", isOn: Binding(get: { source.trusted }, set: { value in
+                            if let i = sources.firstIndex(of: source) { sources[i].trusted = value }
+                        })).toggleStyle(.checkbox)
+                        Button(role: .destructive) { sources.removeAll { $0 == source } } label: { Image(systemName: "minus.circle") }
+                            .buttonStyle(.borderless)
+                    }
+                }
+            }
+            .frame(minHeight: 140)
+            HStack {
+                TextField("Name", text: $name).frame(width: 120)
+                TextField("github:owner/repo or https://…/fixes.json", text: $url)
+                Toggle("Trusted", isOn: $trusted).toggleStyle(.checkbox)
+                Button("Add") {
+                    sources.removeAll { $0.name == name }
+                    sources.append(FixSource(name: name.trimmingCharacters(in: .whitespaces), url: url.trimmingCharacters(in: .whitespaces), trusted: trusted))
+                    name = ""; url = ""; trusted = false
+                }
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || url.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                Button("Save and Update") {
+                    do { try FixLibrary.setAddedSources(sources); store.updateFixes(); dismiss() }
+                    catch { store.alert = error.localizedDescription }
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 620)
     }
 }
 

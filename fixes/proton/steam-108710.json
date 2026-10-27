@@ -1,0 +1,13 @@
+{
+  "name": "Alan Wake",
+  "match": {
+    "steam": [
+      108710
+    ]
+  },
+  "components": [
+    "d3dcompiler_47"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/108710.py"
+}

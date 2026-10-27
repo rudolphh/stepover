@@ -1,0 +1,15 @@
+{
+  "name": "Sword of the Stars",
+  "match": {
+    "steam": [
+      42890
+    ]
+  },
+  "components": [
+    "d3dcompiler_42",
+    "d3dx9_31",
+    "d3dx9_42"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/42890.py"
+}

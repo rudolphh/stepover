@@ -1,0 +1,13 @@
+{
+  "name": "Tom Clancy's Ghost Recon Breakpoint",
+  "match": {
+    "steam": [
+      2231380
+    ]
+  },
+  "components": [
+    "ubisoftconnect"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/2231380.py"
+}

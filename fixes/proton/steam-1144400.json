@@ -1,0 +1,13 @@
+{
+  "name": "Senren*Banka",
+  "match": {
+    "steam": [
+      1144400
+    ]
+  },
+  "args": [
+    "-vomstyle=layer"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1144400.py"
+}

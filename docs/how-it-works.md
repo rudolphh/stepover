@@ -42,6 +42,27 @@ processes (a window surface lives in its owner's process), so the Steam window s
 every graphics backend. With the GPU work in the browser process, Steam runs GPU-accelerated on
 D3DMetal.
 
+## The fix list
+
+Per-game fixes are JSON files (format and safety rules: `fixes/README.md`). `FixLibrary` loads them
+in this order, later ones winning: the official list (downloaded from the repository's `fixes/`
+folder into `<Fixes>/Sources/official`, else the copy inside Stepover.app), sources the user adds
+(`<Fixes>/sources.json`), and the user's own folder `<Fixes>/Local`. Invalid fixes are skipped;
+flagged items (ones that could run commands) are left out unless the source is trusted or the fix is
+the user's own.
+
+A fix matches a bottle by Steam app ID (`SteamLibrary` reads Steam's `appmanifest_*.acf` files and
+`libraryfolders.vdf` inside the bottle) or by program file name. Its graphics, environment and DLL
+settings go into `stepover-compat.conf` beneath the bottle's own rules; the plug-in applies DLL
+overrides with ntdll's exported `add_load_order_override()` and writes environment variables into
+the Windows environment block as well as the Mac one (Windows programs read the block, which Wine
+builds before the plug-in loads). Components (winetricks) and registry values are installed by
+`Launcher.applyFixes` before a program starts, once per bottle, only for games actually present.
+
+`fixes/tools/import-protonfixes.py` converts umu-protonfixes Steam fixes that are plain data into
+`fixes/proton/`; files with logic are skipped. `.github/workflows/fixes.yml` checks pull requests
+with the checker built from the base branch and merges the clean ones.
+
 `GraphicsPicker` chooses when a program is added: a few known games first, then the exe itself:
 64-bit DirectX 11/12 gets D3DMetal, 32-bit DirectX 10/11 gets DXMT (D3DMetal is 64-bit only),
 DirectX 9 and older gets WineD3D.
@@ -97,5 +118,5 @@ build and release: `STEPOVER_SRC`, `STEPOVER_BUILD`, `STEPOVER_DOWNLOADS`, `STEP
 
 ## Not included
 
-GStreamer (Wine 11's FFmpeg path, `winedmo`, decodes media instead), CrossOver's per-game hack
-database, and its anti-cheat integration.
+GStreamer (Wine 11's FFmpeg path, `winedmo`, decodes media instead), most of CrossOver's per-game
+hack database (Stepover's open fix list grows instead), and its anti-cheat integration.

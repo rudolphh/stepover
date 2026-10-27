@@ -1,0 +1,13 @@
+{
+  "name": "Way of the Samurai 4",
+  "match": {
+    "steam": [
+      312780
+    ]
+  },
+  "components": [
+    "d3dcompiler_47"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/312780.py"
+}

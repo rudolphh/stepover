@@ -1,0 +1,21 @@
+{
+  "name": "Recettear: An Item Shop's Tale",
+  "match": {
+    "steam": [
+      70400
+    ]
+  },
+  "dlls": {
+    "streamci": "native"
+  },
+  "components": [
+    "dmime",
+    "dmloader",
+    "dmsynth",
+    "dmusic",
+    "dsound",
+    "dswave"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/70400.py"
+}

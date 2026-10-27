@@ -1,0 +1,15 @@
+{
+  "name": "Halo 3: ODST mod tools",
+  "match": {
+    "steam": [
+      1695794
+    ]
+  },
+  "components": [
+    "vcrun2019",
+    "d3dcompiler_47",
+    "msxml3"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1695794.py"
+}

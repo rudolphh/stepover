@@ -1,0 +1,14 @@
+{
+  "name": "Crysis Remastered",
+  "match": {
+    "steam": [
+      1715130
+    ]
+  },
+  "components": [
+    "vcrun2019",
+    "d3dcompiler_43"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1715130.py"
+}

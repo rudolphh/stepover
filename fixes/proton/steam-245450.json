@@ -1,0 +1,13 @@
+{
+  "name": "Wizardry 8",
+  "match": {
+    "steam": [
+      245450
+    ]
+  },
+  "components": [
+    "mfc42"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/245450.py"
+}

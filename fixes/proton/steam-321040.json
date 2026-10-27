@@ -1,0 +1,13 @@
+{
+  "name": "Dirt 3 Complete Edition",
+  "match": {
+    "steam": [
+      321040
+    ]
+  },
+  "components": [
+    "openal"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/321040.py"
+}

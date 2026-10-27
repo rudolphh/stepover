@@ -1,0 +1,13 @@
+{
+  "name": "Phantasy Star Online 2",
+  "match": {
+    "steam": [
+      1056640
+    ]
+  },
+  "env": {
+    "WINE_NO_OPEN_FILE_SEARCH": "pso2_bin/data"
+  },
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1056640.py"
+}

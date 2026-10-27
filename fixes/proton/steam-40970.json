@@ -1,0 +1,13 @@
+{
+  "name": "Stronghold Crusader HD",
+  "match": {
+    "steam": [
+      40970
+    ]
+  },
+  "components": [
+    "directplay"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/40970.py"
+}

@@ -25,6 +25,9 @@ mkdir -p "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources"
 cp "$OUT/StepoverApp" "$STAGE/Contents/MacOS/Stepover"
 cp "$OUT/stepover" "$STAGE/Contents/MacOS/stepover-cli"   # "stepover" would collide with "Stepover"
 if [ -n "${STEPOVER_RUNTIME_JSON:-}" ]; then cp "$STEPOVER_RUNTIME_JSON" "$STAGE/Contents/Resources/runtime.json"; fi
+# the fix list, used until the app downloads a newer one (FixLibrary): fix files and their licenses
+rsync -a --prune-empty-dirs --include '*/' --include '*.json' --include 'LICENSE' --exclude '*' \
+    "$SRC/../fixes/" "$STAGE/Contents/Resources/fixes/"
 
 ICONSET="$SRC/.build/AppIcon.iconset"
 rm -rf "$ICONSET"

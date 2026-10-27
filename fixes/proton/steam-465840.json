@@ -1,0 +1,13 @@
+{
+  "name": "The Last Blade",
+  "match": {
+    "steam": [
+      465840
+    ]
+  },
+  "components": [
+    "d3dcompiler_46"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/465840.py"
+}

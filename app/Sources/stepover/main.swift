@@ -1,4 +1,5 @@
 import StepoverKit
+import AppKit
 import Foundation
 
 let usage = """
@@ -20,6 +21,13 @@ usage: stepover <command> ...
   install <bottle> <setup.exe|.msi> [-- installer args]
                                         run a Windows installer; its new shortcuts become programs
   components <bottle> <verb...>         install runtime components with winetricks (vcrun2022, dotnet48...)
+  fixes [<bottle>]                      the fix list, or the fixes that apply in a bottle
+  fixes check <file or folder...>       check fix files (exit 1: invalid, 2: valid but flagged for review)
+  fixes update                          download the official fix list and the sources you added
+  fixes sources [add <name> <github:owner/repo | https://...json> [--trusted] | remove <name>]
+  fixes save <bottle> <program>         save a program's working settings as your own fix
+  fixes share <bottle> <program>        open GitHub with that fix filled in, to propose it
+  fixes folder                          where your own fixes go (applied as written)
   components                            list the common ones
   runtime [status|install [--from <file or URL>]]
                                         the Wine runtime the app downloads on first launch
@@ -211,6 +219,88 @@ do {
         let added = try WindowsSetup.install(file, into: b, arguments: installerArgs, output: .inherit)
         if added.isEmpty { print("installer finished; no new Start Menu or desktop shortcuts, so add the program with the app") }
         for p in added { print("added \(p.name): \(b.loadConfig().backend(for: p).label)  \(p.exe)") }
+
+    case "fixes":
+        let sub = args.first ?? "list"
+        func findProgram(in b: Bottle, named name: String) -> Program {
+            guard let p = program(name, in: b.loadConfig()) else { fail("\(b.name) has no program named \(name)") }
+            return p
+        }
+        switch sub {
+        case "list" where args.count <= 1:
+            let loaded = FixLibrary.load()
+            print("\(loaded.fixes.count) fixes (official: \(FixLibrary.official.url); your own: \(FixLibrary.localFolder.path))")
+            for note in loaded.notes { print("  note: \(note)") }
+        case "check":
+            let paths = args.dropFirst()
+            guard !paths.isEmpty else { fail("fixes check <file or folder...>") }
+            var invalid = false, flagged = false, count = 0
+            for path in paths {
+                let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+                var isDir: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) else { fail("no such file: \(path)") }
+                let files = isDir.boolValue
+                    ? (FileManager.default.enumerator(at: url, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL } ?? [])
+                        .filter { $0.pathExtension.lowercased() == "json" }.sorted { $0.path < $1.path }
+                    : [url]
+                for file in files {
+                    guard let data = try? Data(contentsOf: file), let fixes = try? Fix.decodeFile(data) else {
+                        print("\(file.path): not a fix file (invalid JSON)"); invalid = true; continue
+                    }
+                    for fix in fixes {
+                        count += 1
+                        for problem in fix.problems() { print("\(file.path): \(problem)"); invalid = true }
+                        for item in fix.flagged() { print("\(file.path): flagged for review: \(item)"); flagged = true }
+                    }
+                }
+            }
+            print("\(count) fixes checked: \(invalid ? "invalid" : flagged ? "valid, needs a person to review" : "ok")")
+            exit(invalid ? 1 : flagged ? 2 : 0)
+        case "update":
+            let semaphore = DispatchSemaphore(value: 0)
+            nonisolated(unsafe) var report: [String] = []
+            Task.detached { report = await FixLibrary.update(); semaphore.signal() }
+            semaphore.wait()
+            report.forEach { print($0) }
+        case "sources":
+            var added = FixLibrary.addedSources()
+            if args.count >= 4, args[1] == "add" {
+                added.removeAll { $0.name == args[2] }
+                added.append(FixSource(name: args[2], url: args[3], trusted: args.contains("--trusted")))
+                try FixLibrary.setAddedSources(added)
+            } else if args.count == 3, args[1] == "remove" {
+                added.removeAll { $0.name == args[2] }
+                try FixLibrary.setAddedSources(added)
+            } else if args.count > 1 {
+                fail("fixes sources [add <name> <url> [--trusted] | remove <name>]")
+            }
+            for source in [FixLibrary.official] + FixLibrary.addedSources() {
+                print("\(source.name): \(source.url)\(source.trusted ? " (trusted)" : "")")
+            }
+        case "save", "share":
+            guard args.count == 3 else { fail("fixes \(sub) <bottle> <program>") }
+            let b = bottle(args[1])
+            let fix = FixLibrary.fix(from: findProgram(in: b, named: args[2]), in: b)
+            if sub == "save" {
+                print("saved \(try FixLibrary.saveLocal(fix).path)")
+            } else if let url = FixLibrary.shareURL(for: fix) {
+                print(url.absoluteString)
+                NSWorkspace.shared.open(url)
+            }
+        case "folder":
+            print(FixLibrary.localFolder.path)
+        default:
+            let b = bottle(sub)
+            let config = b.loadConfig()
+            let matched = Launcher.matchedFixes(b, config: config)
+            if !config.fixes { print("fixes are off in \(b.name)") }
+            for m in matched {
+                print("\(m.fix.name)  [\(m.fix.id)]")
+                print("    programs: \(m.programs.joined(separator: ", "))")
+                if let notes = m.fix.notes { print("    \(notes)") }
+            }
+            if matched.isEmpty { print("no fixes apply in \(b.name)") }
+        }
 
     case "components":
         guard let name = args.first else {

@@ -1,0 +1,13 @@
+{
+  "name": "Dark Souls Remastered",
+  "match": {
+    "steam": [
+      570940
+    ]
+  },
+  "components": [
+    "vcrun2017"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/570940.py"
+}

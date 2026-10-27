@@ -1,0 +1,7 @@
+{
+  "name": "Hi-Fi RUSH",
+  "match": { "steam": [1817230], "exe": ["Hi-Fi-RUSH.exe"] },
+  "graphics": "d3dmetal",
+  "notes": "Turn MSync off for this bottle (Bottle settings); with it on the intro hangs. 60 fps locked at the menu on an M4 Max.",
+  "source": "Tested with Stepover 0.1 on an M4 Max, October 2026"
+}

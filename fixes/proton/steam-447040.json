@@ -1,0 +1,13 @@
+{
+  "name": "Watch_Dogs 2",
+  "match": {
+    "steam": [
+      447040
+    ]
+  },
+  "args": [
+    "-eac_launcher -nosplash"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/447040.py"
+}

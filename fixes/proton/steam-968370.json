@@ -1,0 +1,13 @@
+{
+  "name": "The Blind Prophet",
+  "match": {
+    "steam": [
+      968370
+    ]
+  },
+  "dlls": {
+    "d3d9": "disabled"
+  },
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/968370.py"
+}

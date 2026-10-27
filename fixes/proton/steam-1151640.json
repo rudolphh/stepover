@@ -1,0 +1,13 @@
+{
+  "name": "Horizon Zero Dawn",
+  "match": {
+    "steam": [
+      1151640
+    ]
+  },
+  "components": [
+    "vcrun2019"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1151640.py"
+}

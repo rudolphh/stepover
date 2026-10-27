@@ -1,0 +1,13 @@
+{
+  "name": "Flight Simulator 2020",
+  "match": {
+    "steam": [
+      1250410
+    ]
+  },
+  "args": [
+    "-FastLaunch"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1250410.py"
+}

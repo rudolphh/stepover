@@ -1,0 +1,16 @@
+{
+  "name": "They Are Billions",
+  "match": {
+    "steam": [
+      644930
+    ]
+  },
+  "env": {
+    "WINE_MONO_HIDETYPES": "1"
+  },
+  "components": [
+    "gdiplus"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/644930.py"
+}

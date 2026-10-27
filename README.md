@@ -37,12 +37,23 @@ bottles can be imported as instant copies; CrossOver's own bottle is not touched
 
 Everything also works from Terminal: `stepover help`.
 
+## Fixes
+
+Stepover applies per-game fixes automatically: graphics layer, environment variables, launch
+options, DLL overrides, Windows components and registry values. The list is open: anyone can add a
+fix for any game (**Share Fix on GitHub** on a program's menu opens a pull request; clean ones merge
+automatically), keep their own (**Fixes > Open My Fixes Folder**), or publish their own list and add
+it under **Fixes > Fix Sources**. It starts with fixes for the games tested here and 169 converted
+from [umu-protonfixes](https://github.com/Open-Wine-Components/umu-protonfixes). See
+[fixes/README.md](fixes/README.md).
+
 ## How it compares
 
 - **CrossOver** is the polished, supported product, with a large database of per-game fixes, Steam
   support and installers that fetch what each game needs. CodeWeavers employs many of Wine's
   developers, and buying CrossOver funds Wine. Stepover runs the same Wine and the same graphics
-  layers, without CrossOver's database, its anti-cheat work, or support.
+  layers, with an open fix list instead of CrossOver's database, and without its anti-cheat work or
+  support.
 - **Sikarugir** is mature, widely used and turns each game into its own app. Stepover's Wine comes
   straight from CrossOver's source, it picks the graphics layer per program inside a bottle (so a
   game started by its launcher gets its own), and it works with bottles the way CrossOver does.

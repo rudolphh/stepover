@@ -1,0 +1,13 @@
+{
+  "name": "Little Nightmares",
+  "match": {
+    "steam": [
+      424840
+    ]
+  },
+  "args": [
+    "-onethread"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/424840.py"
+}

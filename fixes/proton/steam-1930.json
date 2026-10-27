@@ -1,0 +1,14 @@
+{
+  "name": "Two Worlds Epic Edition",
+  "match": {
+    "steam": [
+      1930
+    ]
+  },
+  "components": [
+    "xact",
+    "d3dx9"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1930.py"
+}

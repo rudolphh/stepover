@@ -1,0 +1,13 @@
+{
+  "name": "AirMech Strike",
+  "match": {
+    "steam": [
+      206500
+    ]
+  },
+  "args": [
+    "/dx11"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/206500.py"
+}

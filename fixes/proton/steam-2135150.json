@@ -1,0 +1,13 @@
+{
+  "name": "Elin",
+  "match": {
+    "steam": [
+      2135150
+    ]
+  },
+  "dlls": {
+    "winhttp": "native,builtin"
+  },
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/2135150.py"
+}

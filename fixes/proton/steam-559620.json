@@ -1,0 +1,14 @@
+{
+  "name": "Outlaws + A Handful of Missions",
+  "match": {
+    "steam": [
+      559620
+    ]
+  },
+  "dlls": {
+    "ddraw": "native,builtin",
+    "winmm": "native,builtin"
+  },
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/559620.py"
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Metal Slug",
+  "match": {
+    "steam": [
+      366250
+    ]
+  },
+  "components": [
+    "d3dcompiler_46"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/366250.py"
+}

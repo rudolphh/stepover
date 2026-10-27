@@ -1,0 +1,14 @@
+{
+  "name": "the Halo Reach mod tools Foundation gamemode.",
+  "match": {
+    "steam": [
+      1695793
+    ]
+  },
+  "components": [
+    "dotnet35",
+    "dotnet45"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1695793.py"
+}

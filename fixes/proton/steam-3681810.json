@@ -1,0 +1,11 @@
+{
+  "name": "Blue Protocol: Star Resonance",
+  "match": {
+    "steam": [
+      3681810
+    ]
+  },
+  "windowsVersion": "win7",
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/3681810.py"
+}

@@ -1,0 +1,15 @@
+{
+  "name": "WRC 4",
+  "match": {
+    "steam": [
+      256330
+    ]
+  },
+  "components": [
+    "d3dx9_42",
+    "d3dx9_43",
+    "xact"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/256330.py"
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Grim Dawn",
+  "match": {
+    "steam": [
+      219990
+    ]
+  },
+  "components": [
+    "d3dcompiler_43"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/219990.py"
+}

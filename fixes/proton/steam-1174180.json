@@ -1,0 +1,13 @@
+{
+  "name": "Red Dead Redemption 2",
+  "match": {
+    "steam": [
+      1174180
+    ]
+  },
+  "args": [
+    "-fullscreen -vulkan"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1174180.py"
+}

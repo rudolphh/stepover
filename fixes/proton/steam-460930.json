@@ -1,0 +1,13 @@
+{
+  "name": "Ghost Recon WIldlands",
+  "match": {
+    "steam": [
+      460930
+    ]
+  },
+  "components": [
+    "ubisoftconnect"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/460930.py"
+}

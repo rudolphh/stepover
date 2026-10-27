@@ -1,0 +1,11 @@
+{
+  "name": "Legendary",
+  "match": {
+    "steam": [
+      16730
+    ]
+  },
+  "windowsVersion": "winxp",
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/16730.py"
+}

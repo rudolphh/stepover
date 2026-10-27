@@ -1,0 +1,13 @@
+{
+  "name": "Injustice 2",
+  "match": {
+    "steam": [
+      627270
+    ]
+  },
+  "components": [
+    "vcrun2019"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/627270.py"
+}

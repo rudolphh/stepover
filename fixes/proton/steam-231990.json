@@ -1,0 +1,14 @@
+{
+  "name": "Spider-Man: Shattered Dimensions",
+  "match": {
+    "steam": [
+      231990
+    ]
+  },
+  "components": [
+    "d3dx9_43",
+    "xact"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/231990.py"
+}

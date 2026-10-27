@@ -1,0 +1,13 @@
+{
+  "name": "GWENT: Rogue Mage",
+  "match": {
+    "steam": [
+      1711950
+    ]
+  },
+  "components": [
+    "mfc140"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/1711950.py"
+}

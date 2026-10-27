@@ -1,0 +1,14 @@
+{
+  "name": "Super Meat Boy",
+  "match": {
+    "steam": [
+      40800
+    ]
+  },
+  "components": [
+    "d3dcompiler_47",
+    "xact"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/40800.py"
+}

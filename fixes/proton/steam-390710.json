@@ -1,0 +1,13 @@
+{
+  "name": "SUGURI 2",
+  "match": {
+    "steam": [
+      390710
+    ]
+  },
+  "components": [
+    "d3dxof"
+  ],
+  "notes": "Converted from umu-protonfixes.",
+  "source": "umu-protonfixes 4500d09, gamefixes-steam/390710.py"
+}
