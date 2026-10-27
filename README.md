@@ -6,6 +6,10 @@ MetalFX upscaling), DXMT and DXVK, and a Mac app for bottles, installers and per
 
 Free and open source. Not made, endorsed or supported by CodeWeavers or Apple.
 
+> Everybody knows the crossover. The move people still replay came right after it: the step-back
+> jumper in Game 1 of the 2001 Finals, then one slow step over the defender on the floor.
+> Same Wine, one more move.
+
 ## Install
 
     brew trust --tap rudolphh/stepover
@@ -13,7 +17,7 @@ Free and open source. Not made, endorsed or supported by CodeWeavers or Apple.
 
 Homebrew 7 asks you to trust a third-party tap before it installs from it. Stepover is not notarized
 by Apple (that needs a paid developer account), so the cask removes macOS's download flag and signs
-the app for your Mac when it installs, the same approach Sikarugir uses.
+the app for your Mac when it installs, as other unnotarized open-source Mac apps do.
 
 The first time Stepover opens, it downloads its Wine runtime (about 290 MB) and checks it against the
 checksum built into the app.
@@ -47,21 +51,33 @@ it under **Fixes > Fix Sources**. It starts with fixes for the games tested here
 from [umu-protonfixes](https://github.com/Open-Wine-Components/umu-protonfixes). See
 [fixes/README.md](fixes/README.md).
 
-## How it compares
+## What's different
 
-- **CrossOver** is the polished, supported product, with a large database of per-game fixes, Steam
-  support and installers that fetch what each game needs. CodeWeavers employs many of Wine's
-  developers, and buying CrossOver funds Wine. Stepover runs the same Wine and the same graphics
-  layers, with an open fix list instead of CrossOver's database, and without its anti-cheat work or
-  support.
-- **Sikarugir** is mature, widely used and turns each game into its own app. Stepover's Wine comes
-  straight from CrossOver's source, it picks the graphics layer per program inside a bottle (so a
-  game started by its launcher gets its own), and it works with bottles the way CrossOver does.
+- **Nothing to unlock.** No trial, no license key, no account. The code is GPL-3.0, and every source
+  archive a release was built from is attached to it.
+- **Graphics per program, not per bottle.** Stepover reads each `.exe` and picks D3DMetal, DXMT or
+  WineD3D for it inside Wine itself, so a game started by its launcher still gets its own setting.
+- **MetalFX in one switch** for games with a DLSS option.
+- **Steam's window works.** Its web views draw in-process, which fixes the black window Steam shows
+  under Wine on macOS.
+- **An open fix list.** Anyone can add a fix for any game, and a clean one merges in under a minute.
+  Add anyone else's list too. The checks guard only your Mac, never a company's rules.
+- **Your settings win.** A fix never overrides what you set for a program or a bottle.
+- **Bring your bottles.** Existing bottles come over as instant copies; the originals aren't touched.
+- **Every Retina pixel.** High Resolution Mode gives games 3456x2234 instead of 1728x1117 on a 16-inch
+  MacBook Pro, with Windows scaling per bottle to match.
+- **A Mac app for every game,** with its icon, in `~/Applications/Stepover`.
+- **All of it from Terminal too:** `stepover help`.
+- **Checked downloads, careful updates.** The runtime is verified against a checksum built into the
+  app, and an update waits until no game is running.
+
+What it doesn't have: a support team, anti-cheat work (games with kernel anti-cheat will not run) or
+years of per-game fixes. The commercial product this Wine comes from is the polished, supported
+option, and buying it pays many of Wine's developers.
 
 Stepover is young: so far it has been tested with Red Dead Redemption 2 (with Script Hook .NET mods),
-Hi-Fi Rush, Escape from Duckov and L.A. Noire, each matching its CrossOver frame rate, and with the
-Steam client (sign-in, store, downloads), which ran Stumble Guys at 117 fps. Games with kernel
-anti-cheat will not run.
+Hi-Fi Rush, Escape from Duckov and L.A. Noire, each at the same frame rate as the commercial build of
+this Wine, and with the Steam client (sign-in, store, downloads), which ran Stumble Guys at 117 fps.
 
 ## Support
 
