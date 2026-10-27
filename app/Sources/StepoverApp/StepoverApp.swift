@@ -197,7 +197,11 @@ struct BottleView: View {
                                              set: { store.setFix(matched.fix.id, on: $0, in: bottle) })) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(matched.fix.name)
-                                Text(fixSummary(matched)).font(.caption).foregroundStyle(.secondary)
+                                let changes = fixChanges(matched)
+                                if !changes.isEmpty { Text(changes).font(.caption).foregroundStyle(.secondary) }
+                                if let notes = matched.fix.notes, !notes.isEmpty {
+                                    Text(notes).font(.caption).foregroundStyle(.secondary)
+                                }
                             }
                         }
                         .help(matched.fix.id)
@@ -207,7 +211,7 @@ struct BottleView: View {
                 Text("Fixes")
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("From the official list, sources you add and your own folder (Fixes menu); one fix per game, your own winning. Components and registry values install the next time Stepover starts a program here.")
+                    Text("Fixes come from the official list, sources you add and your own fixes folder (Fixes menu). Each game gets one fix, and yours wins. Components and registry values install the next time Stepover starts a program here.")
                     if !store.fixNotes.isEmpty {
                         Text("\(store.fixNotes.count) fix item(s) were skipped or left out for safety; `stepover fixes` lists them.")
                             .help(store.fixNotes.prefix(20).joined(separator: "\n"))
@@ -328,8 +332,8 @@ struct ProgramRow: View {
     }
 }
 
-/// One line about what a fix does, for the bottle's Fixes list.
-func fixSummary(_ matched: MatchedFix) -> String {
+/// One line about what a fix changes, for the bottle's Fixes list; its notes go on their own line.
+func fixChanges(_ matched: MatchedFix) -> String {
     let fix = matched.fix
     var parts: [String] = []
     if let graphics = fix.graphics, let backend = Backend(rawValue: graphics) { parts.append(backend.label) }
@@ -338,9 +342,8 @@ func fixSummary(_ matched: MatchedFix) -> String {
     if !fix.env.isEmpty { parts.append(fix.env.keys.sorted().joined(separator: ", ")) }
     if !fix.args.isEmpty { parts.append(fix.args.joined(separator: " ")) }
     if !fix.registry.isEmpty { parts.append("\(fix.registry.count) registry value(s)") }
-    var line = parts.joined(separator: " · ")
-    if let notes = fix.notes, !notes.isEmpty { line += (line.isEmpty ? "" : ". ") + notes }
-    return line
+    if let version = fix.windowsVersion { parts.append("Windows version: \(version)") }
+    return parts.joined(separator: " · ")
 }
 
 struct FixSourcesSheet: View {
