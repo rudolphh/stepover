@@ -131,4 +131,9 @@ final class StepoverKitTests: XCTestCase {
         XCTAssertEqual(WindowsPath.toWindows(URL(fileURLWithPath: "/usr/bin/true"), bottle: bottle), #"Z:\usr\bin\true"#)
         XCTAssertEqual(WindowsPath.fileName(#"C:\a\RDR2.exe"#), "RDR2.exe")
     }
+
+    func testRuntimeOrderWithBuildNumbers() {
+        XCTAssertEqual(Runtime.ordered(["cx26.4", "cx26.3-10", "cx26.3", "cx26.3-2", "cx26.4.1", "cx26.3.old", "cx26.4.new", ".DS_Store"]),
+                       ["cx26.3", "cx26.3-2", "cx26.3-10", "cx26.4", "cx26.4.1"])
+    }
 }

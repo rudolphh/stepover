@@ -32,11 +32,17 @@ public struct Runtime: Hashable, Sendable {
     public static func installed() -> [Runtime] {
         let fm = FileManager.default
         let names = (try? fm.contentsOfDirectory(atPath: Paths.runtimes.path)) ?? []
-        return names
-            .filter { !$0.hasPrefix(".") && !$0.hasSuffix(".new") && !$0.hasSuffix(".old") }
+        return ordered(names)
             .map { Runtime(url: Paths.runtimes.appendingPathComponent($0)) }
             .filter { fm.isExecutableFile(atPath: $0.wine.path) }
-            .sorted { $0.name.compare($1.name, options: .numeric) == .orderedAscending }
+    }
+
+    /// Runtime folder names, oldest first: cx26.3, cx26.3-2 (a rebuild), cx26.3-10, cx26.4. Leaves out
+    /// hidden names and the installers' .new and .old folders.
+    public static func ordered(_ names: [String]) -> [String] {
+        names
+            .filter { !$0.hasPrefix(".") && !$0.hasSuffix(".new") && !$0.hasSuffix(".old") }
+            .sorted { $0.compare($1, options: .numeric) == .orderedAscending }
     }
 
     /// The named runtime, else STEPOVER_RUNTIME, else the newest installed one.
