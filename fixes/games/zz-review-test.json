@@ -4,5 +4,5 @@
   "registry": [
     { "key": "HKCU\\Software\\Example Vendor\\Example Game", "name": "Path", "type": "REG_SZ", "value": "C:\\Example" }
   ],
-  "notes": "A test that a flagged item waits for a person; not a real fix."
+  "notes": "A test that a flagged item waits for a person; not a real fix (second run)."
 }
