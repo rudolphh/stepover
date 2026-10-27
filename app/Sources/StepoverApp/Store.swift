@@ -14,6 +14,8 @@ final class Store: ObservableObject {
     @Published var display: [String: (highRes: Bool, dpi: Int)] = [:]
     @Published var runtimeReady = !Runtime.installed().isEmpty
     @Published var runtimeProgress: Double?
+    /// The bundled manifest names a newer download than the installed runtime came from.
+    @Published var runtimeUpdate = false
     @Published var hasCrossOver = !Importer.crossOverBottles().isEmpty
     let manifest = RuntimeManifest.bundled()
     private var icons: [String: NSImage] = [:]
@@ -32,6 +34,7 @@ final class Store: ObservableObject {
         bottles = Bottle.all()
         configs = Dictionary(uniqueKeysWithValues: bottles.map { ($0.id, $0.loadConfig()) })
         display = Dictionary(uniqueKeysWithValues: bottles.map { ($0.id, ($0.highResolution, $0.dpi)) })
+        runtimeUpdate = manifest.map { $0.isInstalled && !$0.isCurrent } ?? false
         if selection == nil || !bottles.contains(where: { $0.id == selection }) { selection = bottles.first?.id }
         refreshRunning()
     }

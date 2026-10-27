@@ -25,7 +25,8 @@ mkdir -p "$OUT/sources" "$OUT/tap/Casks"
 
 echo "== runtime archive"
 RT_FILE="stepover-runtime-$RUNTIME.tar.xz"
-COPYFILE_DISABLE=1 tar -c -C "$RUNTIMES" --exclude '.DS_Store' "$RUNTIME" | xz -T0 -6 > "$OUT/$RT_FILE"
+COPYFILE_DISABLE=1 tar -c -C "$RUNTIMES" --exclude '.DS_Store' --exclude '.stepover-manifest.json' \
+    "$RUNTIME" | xz -T0 -6 > "$OUT/$RT_FILE"
 RT_SHA="$(shasum -a 256 "$OUT/$RT_FILE" | cut -d' ' -f1)"
 RT_SIZE="$(stat -f %z "$OUT/$RT_FILE")"
 RT_SUMMARY="$(awk -F= '/^wine=/{w=$2} /^d3dmetal=/{d=$2} /^dxmt=/{x=$2} /^dxvk=/{v=$2} END{print w ", D3DMetal " d ", DXMT " x ", DXVK " v}' "$RUNTIMES/$RUNTIME/VERSION")"
@@ -54,7 +55,8 @@ for f in crossover-sources-26.3.0.tar.gz nettle-3.10.2.tar.gz SDL2-2.32.10.tar.g
 done
 COPYFILE_DISABLE=1 tar -czf "$OUT/sources/stepover-$VERSION-source.tar.gz" -C "${ROOT:h}" \
     --exclude 'stepover/downloads' --exclude 'stepover/sources' --exclude 'stepover/build' \
-    --exclude 'stepover/app/.build' --exclude 'stepover/release/dist' --exclude '.DS_Store' "${ROOT:t}"
+    --exclude 'stepover/app/.build' --exclude 'stepover/release/dist' --exclude 'stepover/.git' \
+    --exclude 'stepover/.worktrees' --exclude '.DS_Store' "${ROOT:t}"
 
 echo "== cask"
 cat > "$OUT/tap/Casks/stepover.rb" <<EOF

@@ -178,7 +178,9 @@ do {
         }
         switch sub {
         case "status":
-            print("\(manifest.name): \(manifest.isInstalled ? "installed" : "not installed") (\(manifest.size / 1_000_000) MB download from \(manifest.url))")
+            let state = manifest.isCurrent ? "installed, up to date"
+                : manifest.isInstalled ? "installed, update available (stepover runtime install)" : "not installed"
+            print("\(manifest.name): \(state) (\(manifest.size / 1_000_000) MB download from \(manifest.url))")
         case "install":
             if let i = args.firstIndex(of: "--from"), i + 1 < args.count { manifest.url = args[i + 1] }
             let semaphore = DispatchSemaphore(value: 0)

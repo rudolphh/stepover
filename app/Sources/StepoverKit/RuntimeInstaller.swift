@@ -24,13 +24,35 @@ public struct RuntimeManifest: Codable, Sendable {
 
     /// Installed and complete (has bin/wine)?
     public var isInstalled: Bool { Runtime.installed().contains { $0.name == name } }
+
+    /// Installed from this exact download? Runtimes record the manifest they came from; one with no
+    /// record (installed by 0.1.1 or earlier) or a different checksum needs an update.
+    public var isCurrent: Bool {
+        Runtime.installed().first { $0.name == name }.map(matches) ?? false
+    }
+
+    public func matches(_ runtime: Runtime) -> Bool {
+        guard let data = try? Data(contentsOf: runtime.url.appendingPathComponent(RuntimeInstaller.recordName)),
+              let recorded = try? JSONDecoder().decode(RuntimeManifest.self, from: data) else { return false }
+        return recorded.sha256.lowercased() == sha256.lowercased()
+    }
 }
 
 public enum RuntimeInstaller {
+    /// The manifest a runtime was installed from, kept inside it (see RuntimeManifest.isCurrent).
+    static let recordName = ".stepover-manifest.json"
+
+    static func record(_ manifest: RuntimeManifest, in runtime: Runtime) throws {
+        try JSONEncoder().encode(manifest).write(to: runtime.url.appendingPathComponent(recordName))
+    }
+
     /// Downloads (or copies, for file:// URLs and plain paths), verifies and unpacks a runtime.
-    /// `progress` gets values from 0 to 1 while downloading.
+    /// `progress` gets values from 0 to 1 while downloading. Replacing a runtime under running
+    /// Wine processes could crash them, so this refuses while any bottle is running, both before
+    /// the download (quick answer) and right before the swap (a game may have started meanwhile).
     public static func install(_ manifest: RuntimeManifest, progress: (@Sendable (Double) -> Void)? = nil) async throws -> Runtime {
         let fm = FileManager.default
+        try ensureNothingRunning(manifest)
         let work = Paths.root.appendingPathComponent(".download")
         try fm.createDirectory(at: work, withIntermediateDirectories: true)
         let archive = work.appendingPathComponent("\(manifest.name).tar.xz")
@@ -63,6 +85,7 @@ public enum RuntimeInstaller {
         guard fm.isExecutableFile(atPath: unpacked.appendingPathComponent("bin/wine").path) else {
             throw StepoverError.message("the runtime archive has no \(manifest.name)/bin/wine")
         }
+        try ensureNothingRunning(manifest)
         if fm.fileExists(atPath: dest.path) {
             let old = Paths.runtimes.appendingPathComponent("\(manifest.name).old")
             try? fm.removeItem(at: old)
@@ -76,7 +99,14 @@ public enum RuntimeInstaller {
         xattr.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
         xattr.arguments = ["-drs", "com.apple.quarantine", dest.path]
         try? xattr.run(); xattr.waitUntilExit()
+        try? record(manifest, in: Runtime(url: dest))  // without it the app only offers the update again
         return Runtime(url: dest)
+    }
+
+    static func ensureNothingRunning(_ manifest: RuntimeManifest) throws {
+        if manifest.isInstalled, let busy = Bottle.all().first(where: \.isRunning) {
+            throw StepoverError.message("quit everything running in \(busy.name) first; the runtime can't be replaced while it's in use")
+        }
     }
 
     static func download(_ url: URL, to file: URL, expected: Int64, progress: (@Sendable (Double) -> Void)?) async throws {

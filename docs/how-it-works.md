@@ -26,8 +26,21 @@ it. CrossOver ships a closed, signed-database plug-in there; Stepover ships `com
 instead. It reads `$STEPOVER_COMPAT` (the bottle's `stepover-compat.conf`), matches the program's file
 name, prepends `lib/d3dmetal/wine`, `lib/dxmt` or `lib/dxvk` to the DLL path, sets
 `CX_ACTIVE_GRAPHICS_BACKEND` (win32u reports WDDM 2.7 scheduling caps for D3DMetal) and the
-program's extra variables. Because it runs per process, a game started by its launcher gets its
+program's extra variables, and appends any `args =` (raw ASCII text) to the process's command line
+in the PEB, before the program reads it. `args` work for 64-bit programs only: for 32-bit ones Wine
+builds the WoW64 copy of the command line before the plug-in loads. Because it runs per process, a game started by its launcher gets its
 own backend. `STEPOVER_COMPAT_DEBUG=1` logs each decision.
+
+## Built-in fixes
+
+`BuiltInFixes.swift` lists per-program rules that every bottle gets, beneath the bottle's own
+`stepover.json` (a bottle's rule wins on graphics and environment; arguments add up;
+`"builtInFixes": false` in a bottle's `stepover.json` turns them all off). The first:
+Steam's `steamwebhelper.exe` gets `--in-process-gpu`. Current Steam's Chromium draws from its GPU
+process into a window the main browser process owns, and Wine's Mac driver drops drawing across
+processes (a window surface lives in its owner's process), so the Steam window stayed black on
+every graphics backend. With the GPU work in the browser process, Steam runs GPU-accelerated on
+D3DMetal.
 
 `GraphicsPicker` chooses when a program is added: a few known games first, then the exe itself:
 64-bit DirectX 11/12 gets D3DMetal, 32-bit DirectX 10/11 gets DXMT (D3DMetal is 64-bit only),
@@ -85,4 +98,4 @@ build and release: `STEPOVER_SRC`, `STEPOVER_BUILD`, `STEPOVER_DOWNLOADS`, `STEP
 ## Not included
 
 GStreamer (Wine 11's FFmpeg path, `winedmo`, decodes media instead), CrossOver's per-game hack
-database, and its Steam and anti-cheat integration.
+database, and its anti-cheat integration.

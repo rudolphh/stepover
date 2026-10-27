@@ -6,7 +6,9 @@
  *   - puts its graphics backend's DLL folder (D3DMetal, DXMT, DXVK) first on the DLL path with
  *     ntdll's exported prepend_dll_path(), the same export CrossOver's plug-in uses,
  *   - sets CX_ACTIVE_GRAPHICS_BACKEND, which win32u reads (WDDM 2.7 caps for D3DMetal),
- *   - sets the program's extra environment variables.
+ *   - sets the program's extra environment variables,
+ *   - appends extra arguments to its command line (for programs started by other programs, such
+ *     as Steam's steamwebhelper.exe, whose command line we don't control; 64-bit programs only).
  *
  * Config: $STEPOVER_COMPAT, else $WINEPREFIX/stepover-compat.conf. INI sections are program file
  * names (case-insensitive) or "*" for the default:
@@ -15,6 +17,8 @@
  *     [lanoire.exe]
  *     backend = dxmt
  *     env = DXMT_LOG_LEVEL=none
+ *     [steamwebhelper.exe]
+ *     args = --in-process-gpu
  * Backend folders default to <runtime>/lib/{d3dmetal/wine,dxmt,dxvk}; STEPOVER_D3DMETAL_DIR,
  * STEPOVER_DXMT_DIR and STEPOVER_DXVK_DIR override them. STEPOVER_COMPAT_DEBUG=1 logs to stderr.
  */
@@ -37,12 +41,15 @@
 extern void prepend_dll_path( const char *path );  /* exported by CrossOver's ntdll.so */
 
 #define MAX_ENV 32
+#define MAX_ARGS 8
 
 struct program
 {
     char backend[32];
     char *env[MAX_ENV];
     int env_count;
+    char *args[MAX_ARGS];
+    int args_count;
 };
 
 static int debug;
@@ -126,9 +133,50 @@ static int read_config( const char *path, const char *name, struct program *prog
         }
         else if (!strcmp( key, "env" ) && strchr( value, '=' ) && prog->env_count < MAX_ENV)
             prog->env[prog->env_count++] = strdup( value );
+        else if (!strcmp( key, "args" ) && in_match && *value && prog->args_count < MAX_ARGS)
+            prog->args[prog->args_count++] = strdup( value );  /* never from [*]: every process would get them */
     }
     fclose( f );
     return found;
+}
+
+static int arg_boundary( WCHAR c ) { return c == ' ' || c == '\t' || c == '"' || c == '='; }
+
+/* Appends " <args>" (raw ASCII text) to the PEB's command line unless it is already there as whole
+ * words. PE ntdll copies the parameters into its own block later (init_user_process_params), so
+ * programs see the change; our buffer is simply never freed. 64-bit programs only: for WoW64 the
+ * 32-bit copy of the parameters is built before this plug-in loads. */
+static void append_args( const char *name, const char *args )
+{
+    UNICODE_STRING *cmd = &NtCurrentTeb()->Peb->ProcessParameters->CommandLine;
+    size_t len = cmd->Length / sizeof(WCHAR), add = strlen( args ), i, j;
+    WCHAR *buf;
+
+    if (NtCurrentTeb()->WowTebOffset)
+    {
+        say( "%s: 32-bit program, not appending %s", name, args );
+        return;
+    }
+    while (len && !cmd->Buffer[len - 1]) len--;  /* a length that counts the terminating NUL */
+    for (i = 0; i + add <= len; i++)
+    {
+        for (j = 0; j < add && cmd->Buffer[i + j] == (unsigned char)args[j]; j++);
+        if (j == add && (!i || arg_boundary( cmd->Buffer[i - 1] )) && (i + add == len || arg_boundary( cmd->Buffer[i + add] )))
+            return;
+    }
+    if (len + 1 + add >= UNICODE_STRING_MAX_CHARS)
+    {
+        say( "%s: command line too long to append %s", name, args );
+        return;
+    }
+    if (!(buf = calloc( len + add + 2, sizeof(WCHAR) ))) return;
+    memcpy( buf, cmd->Buffer, len * sizeof(WCHAR) );
+    buf[len] = ' ';
+    for (i = 0; i < add; i++) buf[len + 1 + i] = (unsigned char)args[i];
+    cmd->Buffer = buf;
+    cmd->Length = (USHORT)((len + 1 + add) * sizeof(WCHAR));  /* fits: checked against UNICODE_STRING_MAX_CHARS */
+    cmd->MaximumLength = (USHORT)(cmd->Length + sizeof(WCHAR));
+    say( "%s: appended %s to the command line", name, args );
 }
 
 static int is_dir( const char *path )
@@ -198,6 +246,11 @@ static void stepover_compat_init( void )
         setenv( prog.env[i], eq + 1, 1 );
         say( "%s: %s=%s", name, prog.env[i], eq + 1 );
         free( prog.env[i] );
+    }
+    for (i = 0; i < prog.args_count; i++)
+    {
+        append_args( name, prog.args[i] );
+        free( prog.args[i] );
     }
 
     if (strcmp( prog.backend, "wined3d" ))

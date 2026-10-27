@@ -16,6 +16,50 @@ final class StepoverKitTests: XCTestCase {
         XCTAssertTrue(conf.contains("[duckov.exe]\nbackend = wined3d\n"))
     }
 
+    func testCompatConfProcessArgs() throws {
+        var config = BottleConfig(graphics: .d3dmetal)
+        config.processes = ["steamwebhelper.exe": ProcessRule(args: ["--in-process-gpu"])]
+        XCTAssertTrue(config.compatConf().contains("[steamwebhelper.exe]\nbackend = d3dmetal\nargs = --in-process-gpu\n"))
+        let json = #"{"processes": {"steamwebhelper.exe": {"args": ["--in-process-gpu"]}}}"#
+        let decoded = try JSONDecoder().decode(BottleConfig.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.processes["steamwebhelper.exe"]?.args, ["--in-process-gpu"])
+    }
+
+    func testRuntimeIsCurrentOnlyWhenItRecordsTheSameDownload() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("stepover-rt-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let runtime = Runtime(url: dir.appendingPathComponent("cx26.3"))
+        try FileManager.default.createDirectory(at: runtime.url, withIntermediateDirectories: true)
+        let manifest = RuntimeManifest(name: "cx26.3", url: "https://example.invalid/rt.tar.xz", sha256: "AAA", size: 1, summary: nil)
+        XCTAssertFalse(manifest.matches(runtime))  // installed before records existed (0.1.1)
+        try RuntimeInstaller.record(manifest, in: runtime)
+        XCTAssertTrue(manifest.matches(runtime))
+        var newer = manifest
+        newer.sha256 = "bbb"
+        XCTAssertFalse(newer.matches(runtime))
+    }
+
+    func testBuiltInFixesApplyInEveryBottleWithoutRepeats() {
+        let plain = BottleConfig(graphics: .dxmt).compatConf()
+        XCTAssertTrue(plain.contains("[steamwebhelper.exe]\nbackend = dxmt\nargs = --in-process-gpu\n"))
+        var config = BottleConfig(graphics: .d3dmetal)
+        config.processes = ["SteamWebHelper.exe": ProcessRule(graphics: .wined3d, args: ["--in-process-gpu"])]
+        let conf = config.compatConf()
+        XCTAssertTrue(conf.contains("[steamwebhelper.exe]\nbackend = wined3d\nargs = --in-process-gpu\n"))
+        XCTAssertEqual(conf.components(separatedBy: "args = --in-process-gpu").count, 2)
+    }
+
+    func testBottleCanTurnOffBuiltInFixesAndArgsStayOneLine() throws {
+        var config = try JSONDecoder().decode(BottleConfig.self, from: Data(#"{"builtInFixes": false}"#.utf8))
+        XCTAssertFalse(config.builtInFixes)
+        XCTAssertFalse(config.compatConf().contains("steamwebhelper.exe"))
+        config.processes = ["game.exe": ProcessRule(args: ["-windowed", "-a\n[*]\nbackend = dxvk"])]
+        let conf = config.compatConf()
+        XCTAssertTrue(conf.contains("[game.exe]\nbackend = d3dmetal\nargs = -windowed\n"))
+        XCTAssertFalse(conf.contains("backend = dxvk"))
+        XCTAssertTrue(BottleConfig().builtInFixes)
+    }
+
     func testMSyncIsOffUnlessSetToOne() {
         var config = BottleConfig()
         XCTAssertFalse(config.msync)

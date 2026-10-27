@@ -60,12 +60,18 @@ public struct Program: Codable, Identifiable, Hashable, Sendable {
 public struct ProcessRule: Codable, Hashable, Sendable {
     public var graphics: Backend?
     public var env: [String: String]
-    public init(graphics: Backend? = nil, env: [String: String] = [:]) { self.graphics = graphics; self.env = env }
+    /// Appended to the process's command line by the compat plug-in (the process is started by
+    /// another program, so Stepover can't pass them itself).
+    public var args: [String]
+    public init(graphics: Backend? = nil, env: [String: String] = [:], args: [String] = []) {
+        self.graphics = graphics; self.env = env; self.args = args
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         graphics = try c.decodeIfPresent(Backend.self, forKey: .graphics)
         env = try c.decodeIfPresent([String: String].self, forKey: .env) ?? [:]
+        args = try c.decodeIfPresent([String].self, forKey: .args) ?? []
     }
 }
 
@@ -86,6 +92,8 @@ public struct BottleConfig: Codable, Sendable {
     /// wine.inf's mtime changes; with an identical file that only costs time and can break bottles
     /// with native .NET (a "could not be started" dialog), so the launcher skips it then.
     public var setupInf: String?
+    /// Apply BuiltInFixes beneath this bottle's rules (default true; false turns them all off).
+    public var builtInFixes = true
 
     public init(runtime: String? = nil, graphics: Backend = .d3dmetal, env: [String: String] = [:],
                 programs: [Program] = [], processes: [String: ProcessRule] = [:], origin: String? = nil) {
@@ -102,6 +110,7 @@ public struct BottleConfig: Codable, Sendable {
         processes = try c.decodeIfPresent([String: ProcessRule].self, forKey: .processes) ?? [:]
         origin = try c.decodeIfPresent(String.self, forKey: .origin)
         setupInf = try c.decodeIfPresent(String.self, forKey: .setupInf)
+        builtInFixes = try c.decodeIfPresent(Bool.self, forKey: .builtInFixes) ?? true
     }
 
     /// The backend a program ends up with.
@@ -117,22 +126,30 @@ public struct BottleConfig: Codable, Sendable {
     /// The text of stepover-compat.conf, which the compat plug-in reads in every Wine process.
     public func compatConf() -> String {
         var out = "# Written by Stepover from stepover.json; edit that file (or use the app) instead.\n\n[*]\nbackend = \(graphics.rawValue)\n"
-        var sections: [String: (Backend?, [String: String])] = [:]
+        var sections: [String: (Backend?, [String: String], [String])] = [:]
+        for fix in builtInFixes ? BuiltInFixes.all : [] {
+            sections[fix.exe.lowercased()] = (fix.rule.graphics, fix.rule.env, fix.rule.args)
+        }
         for program in programs {
             let key = program.exeName.lowercased()
             let existing = sections[key]
-            sections[key] = (program.graphics ?? existing?.0, (existing?.1 ?? [:]).merging(program.env) { _, new in new })
+            sections[key] = (program.graphics ?? existing?.0, (existing?.1 ?? [:]).merging(program.env) { _, new in new },
+                             existing?.2 ?? [])
         }
         for (exe, rule) in processes {
             let key = exe.lowercased()
             let existing = sections[key]
-            sections[key] = (rule.graphics ?? existing?.0, (existing?.1 ?? [:]).merging(rule.env) { _, new in new })
+            let args = existing?.2 ?? []
+            sections[key] = (rule.graphics ?? existing?.0, (existing?.1 ?? [:]).merging(rule.env) { _, new in new },
+                             args + rule.args.filter { !args.contains($0) })
         }
         for key in sections.keys.sorted() {
-            let (backend, env) = sections[key]!
+            let (backend, env, args) = sections[key]!
             out += "\n[\(key)]\n"
             out += "backend = \((backend ?? graphics).rawValue)\n"
             for name in env.keys.sorted() { out += "env = \(name)=\(env[name]!)\n" }
+            // appended as raw text to the command line; a line break would start a new INI line
+            for arg in args where !arg.contains(where: \.isNewline) { out += "args = \(arg)\n" }
         }
         return out
     }

@@ -42,13 +42,15 @@ Everything also works from Terminal: `stepover help`.
 - **CrossOver** is the polished, supported product, with a large database of per-game fixes, Steam
   support and installers that fetch what each game needs. CodeWeavers employs many of Wine's
   developers, and buying CrossOver funds Wine. Stepover runs the same Wine and the same graphics
-  layers, without CrossOver's database, its Steam and anti-cheat work, or support.
+  layers, without CrossOver's database, its anti-cheat work, or support.
 - **Sikarugir** is mature, widely used and turns each game into its own app. Stepover's Wine comes
   straight from CrossOver's source, it picks the graphics layer per program inside a bottle (so a
   game started by its launcher gets its own), and it works with bottles the way CrossOver does.
 
 Stepover is young: so far it has been tested with Red Dead Redemption 2 (with Script Hook .NET mods),
-Hi-Fi Rush, Escape from Duckov and L.A. Noire, each matching its CrossOver frame rate.
+Hi-Fi Rush, Escape from Duckov and L.A. Noire, each matching its CrossOver frame rate, and with the
+Steam client (sign-in, store, downloads), which ran Stumble Guys at 117 fps. Games with kernel
+anti-cheat will not run.
 
 ## Licenses
 
