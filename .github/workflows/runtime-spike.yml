@@ -1,0 +1,53 @@
+# Measures the GitHub macOS runner before the runtime build is moved onto it: CPU, memory, free disk,
+# Rosetta, Metal, and how long the build tools take to install. Changes nothing and publishes nothing.
+name: Runtime spike
+
+on:
+  push:
+    branches: ["runtime-ci/**"]
+    paths: [".github/workflows/runtime-spike.yml", "runtime/tests/metal-probe.swift"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Machine
+        run: |
+          {
+            echo "## Machine"
+            echo '```'
+            uname -m
+            sysctl -n machdep.cpu.brand_string
+            echo "cores=$(sysctl -n hw.ncpu)"
+            echo "memory_gb=$(( $(sysctl -n hw.memsize) / 1073741824 ))"
+            sw_vers
+            xcodebuild -version
+            df -g /
+            echo "free_disk_gb=$(df -g / | awk 'NR==2 {print $4}')"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Rosetta
+        run: |
+          if ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+            softwareupdate --install-rosetta --agree-to-license || true
+          fi
+          if arch -x86_64 /usr/bin/true 2>/dev/null; then r=yes; else r=no; fi
+          echo "rosetta=$r" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Metal
+        run: swift runtime/tests/metal-probe.swift | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Build tools
+        run: |
+          start=$(date +%s)
+          brew install mingw-w64 bison flex ninja cmake pkgconf autoconf automake libtool llvm lld nasm meson glslang freetype
+          echo "brew_minutes=$(( ($(date +%s) - start + 59) / 60 ))" | tee -a "$GITHUB_STEP_SUMMARY"
