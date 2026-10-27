@@ -1,0 +1,10 @@
+--- a/src/d3d10/d3d10_interfaces.h	2026-10-27 00:27:39
++++ b/src/d3d10/d3d10_interfaces.h	2026-10-27 00:27:40
+@@ -4,6 +4,6 @@
+ 
+ #ifdef _MSC_VER
+ struct __declspec(uuid("0803425a-57f5-4dd6-9465-a87570834a08")) ID3D10StateBlock;
+-#else
++#elif !defined(__MINGW64_VERSION_MAJOR) || __MINGW64_VERSION_MAJOR < 14  // mingw-w64 14's d3d10effect.h declares it (Stepover build fix)
+ __CRT_UUID_DECL(ID3D10StateBlock, 0x0803425a,0x57f5,0x4dd6,0x94,0x65,0xa8,0x75,0x70,0x83,0x4a,0x08);
+ #endif

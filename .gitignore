@@ -1,0 +1,8 @@
+# Downloads, extracted sources and build output (rebuildable; about 2.5 GB).
+# Anchored: git on macOS ignores case, so a bare "sources/" would also hide app/Sources.
+/downloads/
+/sources/
+/build/
+/app/.build/
+/release/dist/
+.DS_Store

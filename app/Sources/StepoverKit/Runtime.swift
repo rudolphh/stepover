@@ -1,0 +1,49 @@
+import Foundation
+
+/// An installed Wine runtime (built by ~/.local/src/stepover/runtime/install-runtime.sh).
+public struct Runtime: Hashable, Sendable {
+    public let url: URL
+    public var name: String { url.lastPathComponent }
+    public var wine: URL { url.appendingPathComponent("bin/wine") }
+    public var wineserver: URL { url.appendingPathComponent("bin/wineserver") }
+    public var lib: URL { url.appendingPathComponent("lib") }
+    public var d3dmetalWindowsDir: URL { lib.appendingPathComponent("d3dmetal/wine/x86_64-windows") }
+    public var libd3dshared: URL { lib.appendingPathComponent("d3dmetal/external/libd3dshared.dylib") }
+    public var wineInf: URL { url.appendingPathComponent("share/wine/wine.inf") }
+
+    /// key=value lines of the runtime's VERSION file
+    public var info: [String: String] {
+        guard let text = try? String(contentsOf: url.appendingPathComponent("VERSION"), encoding: .utf8) else { return [:] }
+        var out: [String: String] = [:]
+        for line in text.split(separator: "\n") {
+            let parts = line.split(separator: "=", maxSplits: 1).map(String.init)
+            if parts.count == 2 { out[parts[0]] = parts[1] }
+        }
+        return out
+    }
+
+    public var summary: String {
+        let i = info
+        var text = "\(i["wine"] ?? name), D3DMetal \(i["d3dmetal"] ?? "?"), DXMT \(i["dxmt"] ?? "?")"
+        if let dxvk = i["dxvk"], dxvk != "none" { text += ", DXVK \(dxvk)" }
+        return text
+    }
+
+    public static func installed() -> [Runtime] {
+        let fm = FileManager.default
+        let names = (try? fm.contentsOfDirectory(atPath: Paths.runtimes.path)) ?? []
+        return names
+            .filter { !$0.hasPrefix(".") && !$0.hasSuffix(".new") && !$0.hasSuffix(".old") }
+            .map { Runtime(url: Paths.runtimes.appendingPathComponent($0)) }
+            .filter { fm.isExecutableFile(atPath: $0.wine.path) }
+            .sorted { $0.name.compare($1.name, options: .numeric) == .orderedAscending }
+    }
+
+    /// The named runtime, else STEPOVER_RUNTIME, else the newest installed one.
+    public static func resolve(_ name: String?) -> Runtime? {
+        let all = installed()
+        if let name, let match = all.first(where: { $0.name == name }) { return match }
+        if let fallback = Paths.defaultRuntimeName, let match = all.first(where: { $0.name == fallback }) { return match }
+        return all.last
+    }
+}
