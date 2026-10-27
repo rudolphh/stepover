@@ -1,0 +1,189 @@
+# Builds a Stepover runtime from new CrossOver source and checks it, every day. Publishes nothing: a runtime
+# that passes every check is kept as a workflow artifact (docs/superpowers/specs/2026-10-27-automatic-
+# runtime-builds-design.md, sections 1 to 3). A changed archive under the pinned version, a failed build or
+# a failed check fails the run, and GitHub notifies the maintainer.
+name: Runtime
+
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Build the pinned CrossOver version even when nothing new is out
+        type: boolean
+        default: false
+  push:
+    branches: ["runtime-ci/**"]
+    paths: ["runtime/**", "compat/**", "app/**", ".github/workflows/runtime.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runtime
+  cancel-in-progress: false
+
+# Explicit bash runs with -eo pipefail, so a failed check piped into tee fails the step.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  detect:
+    runs-on: macos-15
+    outputs:
+      new: ${{ steps.latest.outputs.new }}
+      version: ${{ steps.latest.outputs.version }}
+      sha256: ${{ steps.latest.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Verify the pinned source archive (a changed archive stops everything here)
+        run: |
+          STEPOVER_SRC="$GITHUB_WORKSPACE" STEPOVER_DOWNLOADS="$RUNNER_TEMP/dl" STEPOVER_SOURCES="$RUNNER_TEMP/sources" \
+            runtime/fetch-sources.sh
+
+      - name: Look for newer CrossOver source
+        id: latest
+        run: |
+          pinned="$(bash -c 'source runtime/config.sh; echo "$CX_VERSION"')"
+          pinned_sha="$(bash -c 'source runtime/config.sh; echo "$CX_SHA256"')"
+          latest="$(runtime/latest-crossover.sh)"
+          newest="$(printf '%s\n%s\n' "$pinned" "$latest" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)"
+          if [ "$newest" != "$pinned" ]; then
+            curl -fsSL --retry 3 -o "$RUNNER_TEMP/new.tar.gz" \
+              "https://media.codeweavers.com/pub/crossover/source/crossover-sources-$latest.tar.gz"
+            sha="$(shasum -a 256 "$RUNNER_TEMP/new.tar.gz" | cut -d' ' -f1)"
+            { echo "new=true"; echo "version=$latest"; echo "sha256=$sha"; } >> "$GITHUB_OUTPUT"
+            echo "New CrossOver source: $latest (sha256 $sha)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            { echo "new=false"; echo "version=$pinned"; echo "sha256=$pinned_sha"; } >> "$GITHUB_OUTPUT"
+            echo "No CrossOver source newer than $pinned." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  build:
+    needs: detect
+    if: needs.detect.outputs.new == 'true' || github.event_name == 'push' || inputs.force
+    runs-on: macos-15
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Settings
+        env:
+          CX_VERSION: ${{ needs.detect.outputs.version }}
+          CX_SHA256: ${{ needs.detect.outputs.sha256 }}
+        run: |
+          [[ "$CX_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$CX_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "bad version or checksum"; exit 1; }
+          {
+            echo "STEPOVER_SRC=$GITHUB_WORKSPACE"
+            echo "STEPOVER_BUILD=$RUNNER_TEMP/build"
+            echo "STEPOVER_DOWNLOADS=$RUNNER_TEMP/dl"
+            echo "STEPOVER_SOURCES=$RUNNER_TEMP/sources"
+            echo "STEPOVER_RUNTIMES=$RUNNER_TEMP/runtimes"
+            echo "STEPOVER_CX_VERSION=$CX_VERSION"
+            echo "STEPOVER_CX_SHA256=$CX_SHA256"
+            echo "OUT=$RUNNER_TEMP/out"
+            echo "STARTED=$(date +%s)"
+          } >> "$GITHUB_ENV"
+
+      - name: Rosetta
+        run: arch -x86_64 /usr/bin/true 2>/dev/null || softwareupdate --install-rosetta --agree-to-license
+
+      - name: Build tools
+        run: brew install mingw-w64 bison flex ninja cmake pkgconf autoconf automake libtool llvm lld nasm meson glslang freetype xz
+
+      - name: CrossOver source
+        run: runtime/fetch-sources.sh
+
+      - name: Wine Mono and Gecko versions
+        run: |
+          source runtime/config.sh
+          while IFS='=' read -r key value; do
+            [[ "$value" =~ ^[0-9]+(\.[0-9]+)+$ ]] || { echo "unexpected $key=$value"; exit 1; }
+            case "$key" in
+              MONO_VERSION)
+                [ "$value" = "$MONO_VERSION" ] && continue
+                curl -fsSL --retry 3 -o "$RUNNER_TEMP/mono.tar.xz" "https://dl.winehq.org/wine/wine-mono/$value/wine-mono-$value-x86.tar.xz"
+                { echo "STEPOVER_MONO_VERSION=$value"
+                  echo "STEPOVER_MONO_SHA256=$(shasum -a 256 "$RUNNER_TEMP/mono.tar.xz" | cut -d' ' -f1)"; } >> "$GITHUB_ENV"
+                echo "Wine Mono $value (new, trusted on first download)" >> "$GITHUB_STEP_SUMMARY" ;;
+              GECKO_VERSION)
+                [ "$value" = "$GECKO_VERSION" ] && continue
+                for arch in x86 x86_64; do
+                  curl -fsSL --retry 3 -o "$RUNNER_TEMP/gecko-$arch.tar.xz" "https://dl.winehq.org/wine/wine-gecko/$value/wine-gecko-$value-$arch.tar.xz"
+                done
+                { echo "STEPOVER_GECKO_VERSION=$value"
+                  echo "STEPOVER_GECKO_X86_SHA256=$(shasum -a 256 "$RUNNER_TEMP/gecko-x86.tar.xz" | cut -d' ' -f1)"
+                  echo "STEPOVER_GECKO_X64_SHA256=$(shasum -a 256 "$RUNNER_TEMP/gecko-x86_64.tar.xz" | cut -d' ' -f1)"; } >> "$GITHUB_ENV"
+                echo "Wine Gecko $value (new, trusted on first download)" >> "$GITHUB_STEP_SUMMARY" ;;
+            esac
+          done < <(runtime/addon-versions.sh "$STEPOVER_SOURCES/sources/wine")
+
+      - name: Newest published runtime (D3DMetal, and the previous runtime for the checks)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/previous"
+          cd "$RUNNER_TEMP/previous"
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS
+          line="$(grep -E '  stepover-runtime-[^ ]+\.tar\.xz$' SHA256SUMS | head -1)"
+          file="${line##* }"
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern "$file"
+          echo "$line" | shasum -a 256 -c -
+          tar -xJf "$file"
+          {
+            echo "STEPOVER_D3DMETAL_ARCHIVE=$RUNNER_TEMP/previous/$file"
+            name="${file#stepover-runtime-}"
+            echo "PREVIOUS_RUNTIME=$RUNNER_TEMP/previous/${name%.tar.xz}"
+          } >> "$GITHUB_ENV"
+
+      - name: Host libraries
+        run: runtime/build-deps.sh
+      - name: Wine
+        run: runtime/build-wine.sh
+      - name: DXVK
+        run: runtime/build-dxvk.sh
+      - name: Runtime
+        run: runtime/install-runtime.sh
+      - name: The stepover command
+        run: swift build -c release --package-path app --product stepover
+
+      - name: Checks
+        run: |
+          name="$(bash -c 'source runtime/config.sh; echo "$RUNTIME_NAME"')"
+          echo "RUNTIME_NAME=$name" >> "$GITHUB_ENV"
+          metal=()
+          if swift runtime/tests/metal-probe.swift | grep -q '^metal-queue=ok'; then metal=(--metal); fi
+          mkdir -p "$OUT"
+          runtime/check-runtime.sh "$STEPOVER_RUNTIMES/$name" --previous "$PREVIOUS_RUNTIME" "${metal[@]}" | tee "$OUT/check.log"
+          [ ${#metal[@]} -gt 0 ] || echo "skip metal: no Metal device on this runner" | tee -a "$OUT/check.log"
+
+      - name: Pack (only reached when every check passed)
+        run: |
+          file="stepover-runtime-$RUNTIME_NAME.tar.xz"
+          COPYFILE_DISABLE=1 tar -c -C "$STEPOVER_RUNTIMES" --exclude '.DS_Store' --exclude '.stepover-manifest.json' \
+            "$RUNTIME_NAME" | xz -T0 -6 > "$OUT/$file"
+          (cd "$OUT" && shasum -a 256 "$file" > "$file.sha256")
+          cp "$STEPOVER_RUNTIMES/$RUNTIME_NAME/VERSION" "$OUT/VERSION"
+          {
+            echo "## Runtime $RUNTIME_NAME"
+            echo '```'
+            cat "$OUT/VERSION"
+            cat "$OUT/check.log"
+            cat "$OUT/$file.sha256"
+            echo "build_minutes=$(( ($(date +%s) - STARTED + 59) / 60 ))"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stepover-runtime-${{ env.RUNTIME_NAME }}
+          path: ${{ env.OUT }}
+          retention-days: 30
+          if-no-files-found: error
