@@ -35,8 +35,21 @@ public enum Paths {
     /// next to this executable (named -cli because "Stepover" and "stepover" collide on a case-insensitive disk).
     public static var cli: URL {
         if let value = env["STEPOVER_CLI"], !value.isEmpty { return URL(fileURLWithPath: value) }
-        let me = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
-        let sibling = me.deletingLastPathComponent().appendingPathComponent("stepover-cli")
-        return FileManager.default.isExecutableFile(atPath: sibling.path) ? sibling : me
+        let sibling = executable.deletingLastPathComponent().appendingPathComponent("stepover-cli")
+        return FileManager.default.isExecutableFile(atPath: sibling.path) ? sibling : executable
+    }
+
+    /// This program's real file, with links such as Homebrew's /opt/homebrew/bin/stepover resolved
+    /// (argv[0] is just "stepover" when started through PATH).
+    static var executable: URL {
+        (Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])).resolvingSymlinksInPath()
+    }
+
+    /// Stepover.app when this process runs from inside it, directly or through a link. Bundle.main
+    /// alone misses the linked case: it is then the link's folder.
+    public static var appBundle: Bundle? {
+        let contents = executable.deletingLastPathComponent().deletingLastPathComponent()
+        guard contents.lastPathComponent == "Contents" else { return nil }
+        return Bundle(url: contents.deletingLastPathComponent())
     }
 }

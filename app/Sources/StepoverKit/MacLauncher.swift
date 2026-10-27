@@ -10,7 +10,7 @@ public enum MacLauncher {
     }
 
     /// Stepover.app's bundle identifier (the command inside the app shares it); launchers derive theirs from it.
-    static var appIdentifier: String { Bundle.main.bundleIdentifier ?? "app.stepover.Stepover" }
+    static var appIdentifier: String { Paths.appBundle?.bundleIdentifier ?? "io.github.rudolphh.stepover" }
 
     static func shellQuote(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
 

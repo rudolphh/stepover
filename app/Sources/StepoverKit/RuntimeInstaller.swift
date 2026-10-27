@@ -15,7 +15,7 @@ public struct RuntimeManifest: Codable, Sendable {
         let env = ProcessInfo.processInfo.environment
         let url: URL?
         if let path = env["STEPOVER_RUNTIME_MANIFEST"], !path.isEmpty { url = URL(fileURLWithPath: path) }
-        else { url = Bundle.main.url(forResource: "runtime", withExtension: "json") }
+        else { url = Paths.appBundle?.url(forResource: "runtime", withExtension: "json") }
         guard let url, let data = try? Data(contentsOf: url),
               var manifest = try? JSONDecoder().decode(RuntimeManifest.self, from: data) else { return nil }
         if let override = env["STEPOVER_RUNTIME_URL"], !override.isEmpty { manifest.url = override }
