@@ -5,6 +5,8 @@
 CX_VERSION="${STEPOVER_CX_VERSION:-26.3.0}"
 CX_SHA256="${STEPOVER_CX_SHA256:-ac99c8ca4b3848f3e81784135f023df266b61c2345726ea55a50b3e030dd6872}"
 CX_URL="https://media.codeweavers.com/pub/crossover/source/crossover-sources-${CX_VERSION}.tar.gz"
+# The page listing CodeWeavers' source archives, read by latest-crossover.sh.
+CX_SOURCE_PAGE="${STEPOVER_CX_SOURCE_PAGE:-https://www.codeweavers.com/crossover/source}"
 
 # Wine Mono / Gecko versions the CX tree expects (dlls/appwiz.cpl/addons.c; runtime/addon-versions.sh).
 MONO_VERSION="${STEPOVER_MONO_VERSION:-10.4.1}"
