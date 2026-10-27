@@ -1,9 +1,9 @@
 #!/bin/bash
 # Checks a built Stepover runtime before it goes anywhere: every part is there, Wine boots a new bottle,
 # a Windows program runs, the compat plug-in loads, and with --previous a bottle made by the previous
-# runtime starts on this one. Uses the real `stepover` command in a temporary home, so the user's
-# bottles, logs and launchers are never touched. Prints "ok <check>" or "FAIL <check>: <reason>" and
-# exits 1 at the first failure.
+# runtime starts on this one, and with --metal tiny Direct3D 11 and 12 programs draw through D3DMetal.
+# Uses the real `stepover` command in a temporary home, so the user's bottles, logs and launchers are
+# never touched. Prints "ok <check>" or "FAIL <check>: <reason>" and exits 1 at the first failure.
 #
 #   check-runtime.sh <runtime dir> [--previous <runtime dir>] [--metal]
 #   STEPOVER_CLI   the stepover command (default app/.build/release/stepover)
@@ -81,6 +81,16 @@ if [ -n "$PREVIOUS" ]; then
 fi
 
 if [ "$METAL" = 1 ]; then
-    [ -f "$ROOT/runtime/tests/d3d11.c" ] && [ -f "$ROOT/runtime/tests/d3d12.c" ] ||
-        fail metal "runtime/tests/d3d11.c and d3d12.c are missing"
+    # A new Wine that needs a newer D3DMetal than the one carried over shows up here, before release.
+    "$CLI" graphics check '*' d3dmetal >/dev/null
+    for api in d3d11 d3d12; do
+        x86_64-w64-mingw32-gcc -O2 -o "$STEPOVER_HOME/Bottles/check/drive_c/$api.exe" "$ROOT/runtime/tests/$api.c" -l"$api" -ldxgi
+        STEPOVER_RUNTIME="$NAME" STEPOVER_COMPAT_DEBUG=1 limit 300 "$CLI" run check "C:\\$api.exe" --wait \
+            >"$TMP/run-$api.log" 2>&1 || true
+        grep -q "^stepover-compat: $api.exe: backend d3dmetal" "$TMP/run-$api.log" ||
+            fail metal "$api.exe didn't run on D3DMetal: $(grep "^stepover-compat: $api.exe" "$TMP/run-$api.log" | tail -1)"
+        grep -q "^$api: ok" "$TMP/run-$api.log" ||
+            fail metal "$(grep "^$api:" "$TMP/run-$api.log" | tail -1 || true) (or it crashed or took over 300 s)"
+    done
+    echo "ok metal"
 fi
