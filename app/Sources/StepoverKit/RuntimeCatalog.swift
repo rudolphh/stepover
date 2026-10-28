@@ -18,14 +18,29 @@ public enum RuntimeCatalog {
         running ? (lastRuntime ?? resolved) : resolved
     }
 
+    /// Why a runtime can't be removed right now (a bottle using it is running), or nil when it can.
+    public static func refusal(_ runtime: String, bottles: [Bottle],
+                               resolved: (Bottle) -> String? = { $0.runtime($0.loadConfig())?.name }) -> String? {
+        bottles.first { $0.isRunning && ($0.lastRuntime == runtime || resolved($0) == runtime) }
+            .map { "\($0.name) is running on \(runtime); quit it first" }
+    }
+
     /// Deletes a runtime, unless a bottle that uses it is running. Bottles pinned to it fall back to the
     /// newest good runtime (Runtime.choose); the app asks before calling this when any bottle uses it.
     public static func remove(_ runtime: Runtime, bottles: [Bottle],
                               resolved: (Bottle) -> String? = { $0.runtime($0.loadConfig())?.name }) throws {
-        if let busy = bottles.first(where: { $0.isRunning && ($0.lastRuntime == runtime.name || resolved($0) == runtime.name) }) {
-            throw StepoverError.message("\(busy.name) is running on \(runtime.name); quit it first")
-        }
+        if let reason = refusal(runtime.name, bottles: bottles, resolved: resolved) { throw StepoverError.message(reason) }
         try FileManager.default.removeItem(at: runtime.url)
+    }
+
+    /// "Sainthood", "A and B", "A, B and C".
+    public static func joined(_ names: [String]) -> String {
+        names.count < 2 ? names.joined() : names.dropLast().joined(separator: ", ") + " and " + names.last!
+    }
+
+    /// The confirmation before removing a runtime that bottles use.
+    public static func removalMessage(users: [String], runtime: String, next: String?) -> String {
+        "\(joined(users)) \(users.count == 1 ? "uses" : "use") \(runtime) and will switch to \(next ?? "no runtime")."
     }
 }
 

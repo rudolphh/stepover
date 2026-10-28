@@ -28,6 +28,10 @@ struct RuntimesView: View {
         }
         .padding(20)
         .frame(width: 600)
+        // the window's own alert can't show while this sheet is up
+        .alert("Stepover", isPresented: Binding(get: { store.alert != nil }, set: { if !$0 { store.alert = nil } })) {
+            Button("OK") { store.alert = nil }
+        } message: { Text(store.alert ?? "") }
         .confirmationDialog("Remove \(confirm?.name ?? "")?", isPresented: Binding(get: { confirm != nil }, set: { if !$0 { confirm = nil } }),
                             presenting: confirm) { runtime in
             Button("Remove \(runtime.name)", role: .destructive) { store.removeRuntime(runtime) }
@@ -35,7 +39,7 @@ struct RuntimesView: View {
             let users = RuntimeCatalog.users(of: runtime.name, bottles: store.runtimeUsers)
             let next = Runtime.choose(pinned: nil, lastUsed: nil, installed: names.filter { $0 != runtime.name },
                                       pulled: pulled, preferred: nil)
-            Text("\(users.joined(separator: ", ")) use \(runtime.name). They will switch to \(next ?? "no runtime").")
+            Text(RuntimeCatalog.removalMessage(users: users, runtime: runtime.name, next: next))
         }
     }
 
@@ -59,7 +63,10 @@ struct RuntimesView: View {
                 Button("Switch Its Bottles to \(good)") { store.switchBottles(off: runtime.name) }
             }
             if !kept.contains(runtime.name) {
-                Button("Remove") { if users.isEmpty { store.removeRuntime(runtime) } else { confirm = runtime } }
+                Button("Remove") {
+                    if let reason = RuntimeCatalog.refusal(runtime.name, bottles: store.bottles) { store.alert = reason }
+                    else if users.isEmpty { store.removeRuntime(runtime) } else { confirm = runtime }
+                }
             }
         }
         .padding(.vertical, 2)

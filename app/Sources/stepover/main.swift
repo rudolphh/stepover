@@ -197,7 +197,7 @@ do {
                 return (bottle.name, config.runtime, bottle.runtime(config)?.name)
             })
             try RuntimeCatalog.remove(runtime, bottles: bottles)
-            print("removed \(runtime.name)" + (users.isEmpty ? "" : "; \(users.joined(separator: ", ")) now use \(Runtime.resolve(nil)?.name ?? "no runtime")"))
+            print("removed \(runtime.name)" + (users.isEmpty ? "" : "; \(RuntimeCatalog.joined(users)) now \(users.count == 1 ? "uses" : "use") \(Runtime.resolve(nil)?.name ?? "no runtime")"))
         case "status":
             if index.runtimes.isEmpty { fail("no runtime list (this build has none bundled; set STEPOVER_RUNTIME_INDEX)") }
             for entry in index.runtimes {

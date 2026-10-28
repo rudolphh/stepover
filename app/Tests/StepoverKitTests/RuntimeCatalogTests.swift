@@ -89,6 +89,33 @@ final class RuntimeCatalogTests: XCTestCase {
         XCTAssertEqual(RuntimeCatalog.inUse(resolved: "cx26.5", running: true, lastRuntime: nil), "cx26.5")
     }
 
+    func testJoinedNames() {
+        XCTAssertEqual(RuntimeCatalog.joined(["A"]), "A")
+        XCTAssertEqual(RuntimeCatalog.joined(["A", "B"]), "A and B")
+        XCTAssertEqual(RuntimeCatalog.joined(["A", "B", "C"]), "A, B and C")
+    }
+
+    func testRemovalMessage() {
+        XCTAssertEqual(RuntimeCatalog.removalMessage(users: ["Sainthood"], runtime: "cx26.3-2", next: "cx26.3"),
+                       "Sainthood uses cx26.3-2 and will switch to cx26.3.")
+        XCTAssertEqual(RuntimeCatalog.removalMessage(users: ["I Am Jesus Christ", "Sainthood"], runtime: "cx26.3-2", next: nil),
+                       "I Am Jesus Christ and Sainthood use cx26.3-2 and will switch to no runtime.")
+    }
+
+    /// Remove answers at once when a game using the runtime is running, instead of after a confirmation.
+    func testRefusalNamesTheRunningBottle() throws {
+        let bottleURL = dir.appendingPathComponent("Game")
+        try FileManager.default.createDirectory(at: bottleURL, withIntermediateDirectories: true)
+        let bottle = Bottle(url: bottleURL)
+        bottle.lastRuntime = "cx26.3"
+        XCTAssertNil(RuntimeCatalog.refusal("cx26.3", bottles: [bottle], resolved: { _ in "cx26.5" }))
+        let holder = try holdServerLock(bottle)
+        defer { release(holder, bottle) }
+        XCTAssertEqual(RuntimeCatalog.refusal("cx26.3", bottles: [bottle], resolved: { _ in "cx26.5" }),
+                       "Game is running on cx26.3; quit it first")
+        XCTAssertNil(RuntimeCatalog.refusal("cx26.4", bottles: [bottle], resolved: { _ in "cx26.5" }))
+    }
+
     func testRemoveDeletesIdleRuntime() throws {
         let runtime = try fakeRuntime("cx26.3")
         let bottleURL = dir.appendingPathComponent("Game")
