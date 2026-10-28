@@ -1,0 +1,65 @@
+import XCTest
+@testable import StepoverKit
+
+final class SteamStoreTests: XCTestCase {
+    // Trimmed from Steam's real answers on 2026-10-28.
+    private let rdr2 = Data(#"""
+    {"1174180":{"success":true,"data":{"type":"game","name":"Red Dead Redemption 2","steam_appid":1174180,
+     "platforms":{"windows":true,"mac":false,"linux":false},
+     "categories":[{"id":2,"description":"Single-player"},{"id":1,"description":"Multi-player"},
+                   {"id":18,"description":"Partial Controller Support"},{"id":41,"description":"Remote Play on Phone"}]}}}
+    """#.utf8)
+
+    private let cyberpunk = Data(#"""
+    {"1091500":{"success":true,"data":{"type":"game","name":"Cyberpunk 2077","steam_appid":1091500,
+     "platforms":{"windows":true,"mac":true,"linux":false},
+     "categories":[{"id":2,"description":"Single-player"},{"id":18,"description":"Partial Controller Support"},
+                   {"id":28,"description":"Full controller support"}]}}}
+    """#.utf8)
+
+    private let rdr2Deck = Data(#"""
+    {"success":1,"results":{"appid":1174180,"resolved_category":2,"resolved_items":[
+     {"display_type":3,"loc_token":"#SteamDeckVerified_TestResult_LauncherInteractionIssues"},
+     {"display_type":4,"loc_token":"#SteamDeckVerified_TestResult_DefaultControllerConfigFullyFunctional"},
+     {"display_type":1,"loc_token":"#SteamDeckVerified_TestResult_FirstTimeSetupRequiresActiveInternetConnection"}]}}
+    """#.utf8)
+
+    private let unsupportedDeck = Data(#"""
+    {"success":1,"results":{"appid":1172470,"resolved_category":1,"resolved_items":[
+     {"display_type":3,"loc_token":"#SteamDeckVerified_TestResult_DefaultControllerConfigFullyFunctional"}]}}
+    """#.utf8)
+
+    func testURLs() {
+        XCTAssertEqual(SteamStore.appdetailsURL(1174180).absoluteString,
+                       "https://store.steampowered.com/api/appdetails?appids=1174180&cc=us&l=en")
+        XCTAssertEqual(SteamStore.deckReportURL(1174180).absoluteString,
+                       "https://store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport?nAppID=1174180&l=english")
+    }
+
+    func testStoreFactsRDR2() {
+        let r = SteamStore.storeFacts(appdetails: rdr2, appID: 1174180, checked: "2026-10-28")
+        XCTAssertEqual(r?.name, "Red Dead Redemption 2")
+        XCTAssertEqual(r?.facts, StoreFacts(macVersion: false, singlePlayer: true, controller: .partial, checked: "2026-10-28"))
+    }
+
+    func testStoreFactsFullControllerWinsAndMacVersion() {
+        let r = SteamStore.storeFacts(appdetails: cyberpunk, appID: 1091500, checked: "2026-10-28")
+        XCTAssertEqual(r?.facts.controller, .full)
+        XCTAssertEqual(r?.facts.macVersion, true)
+    }
+
+    func testStoreFactsNoData() {
+        XCTAssertNil(SteamStore.storeFacts(appdetails: Data(#"{"1":{"success":false}}"#.utf8), appID: 1, checked: "2026-10-28"))
+        XCTAssertNil(SteamStore.storeFacts(appdetails: Data("<html>".utf8), appID: 1, checked: "2026-10-28"))
+        XCTAssertNil(SteamStore.storeFacts(appdetails: rdr2, appID: 99, checked: "2026-10-28"))   // another game's answer
+    }
+
+    func testDeckFacts() {
+        XCTAssertEqual(SteamStore.deckFacts(report: rdr2Deck, checked: "2026-10-28"),
+                       DeckFacts(category: .playable, controllerWorks: true, checked: "2026-10-28"))
+        let unsupported = SteamStore.deckFacts(report: unsupportedDeck, checked: "2026-10-28")
+        XCTAssertEqual(unsupported?.category, .unsupported)
+        XCTAssertEqual(unsupported?.controllerWorks, false)
+        XCTAssertNil(SteamStore.deckFacts(report: Data("[]".utf8), checked: "2026-10-28"))
+    }
+}
