@@ -115,7 +115,7 @@ public enum Verdicts {
                 out.append(Reason(text: "An older Mac test (\(year)) didn't run.", source: agwSource(test)))
             } else {
                 let device = test.device.map { " on \($0)" } ?? ""
-                out.append(Reason(text: "Tested with \(test.method ?? label)\(device): \(word(test.rating)).", source: agwSource(test)))
+                out.append(Reason(text: "Tested with \(method(test.method, label: label))\(device): \(word(test.rating)).", source: agwSource(test)))
             }
         }
         if entry.store?.macVersion == true { out.append(Reason(text: "Steam sells a native Mac version.", source: "Steam")) }
@@ -135,6 +135,15 @@ public enum Verdicts {
         return out
     }
 
+    /// The tester's method when it reads like a product and an optional version ("Crossover 25.0", "Whisky 2.3"),
+    /// else the plain label: free text like "Installed through Steam." or "Crossover 23.6 D3DMetal enabled"
+    /// doesn't belong on the verdict card.
+    static func method(_ text: String?, label: String) -> String {
+        guard let text, text.range(of: #"^[A-Za-z]+( [0-9][0-9.]*)?$"#, options: .regularExpression) != nil else { return label }
+        let parts = text.split(separator: " ", maxSplits: 1).map(String.init)
+        return ([parts[0].lowercased() == "crossover" ? "CrossOver" : parts[0]] + parts.dropFirst()).joined(separator: " ")
+    }
+
     static func word(_ rating: MacRating) -> String {
         switch rating {
         case .perfect: return "perfect"
@@ -147,7 +156,7 @@ public enum Verdicts {
     /// "AppleGamingWiki, May 2025" when the test's date has a month, else "AppleGamingWiki".
     static func agwSource(_ test: MacTest) -> String {
         let parts = (test.date ?? "").split(separator: "-").compactMap { Int($0) }
-        guard parts.count >= 2, let date = Calendar(identifier: .gregorian).date(from: DateComponents(year: parts[0], month: parts[1]))
+        guard parts.count >= 2, (1...12).contains(parts[1]), let date = Calendar(identifier: .gregorian).date(from: DateComponents(year: parts[0], month: parts[1]))
         else { return "AppleGamingWiki" }
         let format = DateFormatter()
         format.locale = Locale(identifier: "en_US_POSIX")

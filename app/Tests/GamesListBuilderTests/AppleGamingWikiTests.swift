@@ -79,6 +79,39 @@ final class AppleGamingWikiTests: XCTestCase {
         XCTAssertEqual(AppleGamingWiki.method("Whisky"), "Whisky")
     }
 
+    // Review I1: a Refdevice spread over several lines doesn't end the block.
+    func testMultiLineRefdeviceDoesNotEndTheBlock() {
+        let text = """
+        {{Compatibility/macOS
+        |crossover            = playable
+        |crossover notes      = Runs well.<ref>{{Refdevice|user=x|date=2024-03-02
+        |device=MacBook Pro M3|method=CrossOver 24.0
+        |comment=fine
+        }}</ref>
+        |wine                 = runs
+        |parallels            = unplayable
+        }}
+        """
+        let page = AppleGamingWiki.parse(title: "X", wikitext: text)
+        XCTAssertEqual(page?.tests.crossover, MacTest(rating: .playable, device: "MacBook Pro M3", method: "CrossOver 24.0", date: "2024-03-02"))
+        XCTAssertEqual(page?.tests.wine?.rating, .runs)
+    }
+
+    // Review I4: day and month typed the other way round aren't a date.
+    func testImpossibleDates() {
+        XCTAssertNil(AppleGamingWiki.date("2021-24-10"))
+        XCTAssertNil(AppleGamingWiki.date("2025-15-01"))
+        XCTAssertEqual(AppleGamingWiki.date("2021-10-24"), "2021-10-24")
+    }
+
+    // Review M5 (promoted): an error answer is a failed source, not zero pages.
+    func testRevisionsAnswer() throws {
+        let good = Data(#"{"query":{"pages":[{"title":"X","revisions":[{"slots":{"main":{"content":"{{Compatibility/macOS\n|wine = perfect\n}}"}}}]}]}}"#.utf8)
+        XCTAssertEqual(try AppleGamingWiki.pages(revisionsAnswer: good).first?.tests.wine?.rating, .perfect)
+        XCTAssertThrowsError(try AppleGamingWiki.pages(revisionsAnswer: Data(#"{"error":{"code":"ratelimited"}}"#.utf8)))
+        XCTAssertThrowsError(try AppleGamingWiki.pages(revisionsAnswer: Data("<html>".utf8)))
+    }
+
     func testAntiCheatDecode() {
         let games = AntiCheatList.decode(acyJSON)
         XCTAssertEqual(games?.count, 2)

@@ -28,7 +28,8 @@ case "build":
     guard let fixesDir = option("--fixes", in: args), let out = option("--out", in: args) else {
         fail("usage: games-list build --fixes <dir> --out <file> [--previous <file>]", code: 2)
     }
-    let previous = option("--previous", in: args).flatMap { FileManager.default.contents(atPath: $0) }.flatMap(GamesList.decode)
+    let previous: GamesList?
+    do { previous = try Merge.loadPrevious(path: option("--previous", in: args)) } catch { fail("\(error)") }
     let budget = env["STEPOVER_GAMES_STEAM_BUDGET"].flatMap { Int($0) } ?? 1200
     let delay = env["STEPOVER_GAMES_STEAM_DELAY"].flatMap { Double($0) } ?? 1.5
     let today = String(ISO8601DateFormatter().string(from: Date()).prefix(10))
@@ -58,6 +59,9 @@ case "build":
     print("sources: \(agw.map { "\($0.count)" } ?? "no") AppleGamingWiki pages, \(antiCheat.map { "\($0.count)" } ?? "no") anti-cheat games, "
           + "\(charts.map { "\($0.count)" } ?? "no") charted, \(fixes.count) fixes; previous list \(previous?.games.count ?? 0) games")
 
+    for (id, titles) in Merge.idCollisions(agw ?? []).sorted(by: { $0.key < $1.key }) {
+        print("wiki pages share Steam app \(id): \(titles.joined(separator: ", ")); kept only for the one Steam names")
+    }
     var games = Merge.entries(BuildSources(agw: agw, antiCheat: antiCheat, fixes: fixes, mostPlayed: charts), previous: previous)
     // a quarter of the Steam budget finds app ids for wiki pages that don't record one; the rest refreshes facts
     let searches = Merge.steamToSearch(games, today: today, limit: budget / 4)

@@ -43,6 +43,7 @@ public enum Fetch {
                          "einamespace": "0", "eilimit": "500"]
             if let next { query["eicontinue"] = next }
             let body = try JSONSerialization.jsonObject(with: try await getOK(wikiAPI(query))) as? [String: Any]
+            if body?["error"] != nil { throw Failure(description: "AppleGamingWiki answered with an error") }
             titles += ((body?["query"] as? [String: Any])?["embeddedin"] as? [[String: Any]] ?? []).compactMap { $0["title"] as? String }
             next = (body?["continue"] as? [String: Any])?["eicontinue"] as? String
             await pause(1)
@@ -54,14 +55,7 @@ public enum Fetch {
             let batch = titles[start..<min(start + 50, titles.count)]
             let url = wikiAPI(["action": "query", "prop": "revisions", "rvprop": "content", "rvslots": "main",
                                "titles": batch.joined(separator: "|")])
-            let body = try JSONSerialization.jsonObject(with: try await getOK(url)) as? [String: Any]
-            for page in (body?["query"] as? [String: Any])?["pages"] as? [[String: Any]] ?? [] {
-                guard let title = page["title"] as? String,
-                      let revision = (page["revisions"] as? [[String: Any]])?.first,
-                      let text = ((revision["slots"] as? [String: Any])?["main"] as? [String: Any])?["content"] as? String,
-                      let parsed = AppleGamingWiki.parse(title: title, wikitext: text) else { continue }
-                pages.append(parsed)
-            }
+            pages += try AppleGamingWiki.pages(revisionsAnswer: try await getOK(url))
             await pause(1)
         }
         return pages
@@ -98,6 +92,7 @@ public enum Fetch {
                 if status == 429 || status == 403 { print("Steam answered \(status); stopping Steam lookups for this run"); break }
                 if let results = SteamStore.searchResults(body) {
                     if let steam = Merge.pickSteamID(results, for: game.name) {
+                        print("resolved \(game.name) -> Steam app \(steam) (\(results.first { $0.id == steam }?.name ?? ""))")
                         entries = Merge.resolve(entries, id: id, steam: steam)
                     } else if let i = entries.firstIndex(where: { $0.id == id }) {
                         entries[i].steamSearched = today

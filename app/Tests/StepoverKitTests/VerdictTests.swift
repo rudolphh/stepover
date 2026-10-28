@@ -81,12 +81,27 @@ final class VerdictTests: XCTestCase {
         let v = Verdicts.play(rdr2)
         XCTAssertEqual(v.headline, "Plays great (tested on Mac)")
         XCTAssertEqual(v.kind, .playsGreat)
-        XCTAssertEqual(v.reasons.first, Reason(text: "Tested with Crossover 25.0 on MacBook Air M3: perfect.", source: "AppleGamingWiki, May 2025"))
+        XCTAssertEqual(v.reasons.first, Reason(text: "Tested with CrossOver 25.0 on MacBook Air M3: perfect.", source: "AppleGamingWiki, May 2025"))
         XCTAssertTrue(v.reasons.contains(Reason(text: "Tested with Wine: doesn't run.", source: "AppleGamingWiki")))
         XCTAssertTrue(v.reasons.contains(Reason(text: "Steam Deck: Playable.", source: "Valve")))
         XCTAssertEqual(v.extra, ["Stepover applies a fix for this game automatically"])
         XCTAssertEqual(Verdicts.play(game(wine: test(.playable))).headline, "Playable (tested on Mac)")
         XCTAssertEqual(Verdicts.play(game(crossover: test(.runs))).headline, "Starts, with problems (tested on Mac)")
+    }
+
+    // Review I5: a tester's free-text method only shows when it reads like a product and version.
+    func testMethodCopy() {
+        func first(_ method: String) -> String? { Verdicts.play(game(crossover: test(.perfect, method: method))).reasons.first?.text }
+        XCTAssertEqual(first("Installed through Steam."), "Tested with CrossOver: perfect.")
+        XCTAssertEqual(first("Crossover 23.6 D3DMetal enabled"), "Tested with CrossOver: perfect.")
+        XCTAssertEqual(first("Whisky+PortingKit"), "Tested with CrossOver: perfect.")
+        XCTAssertEqual(first("crossover 24.0.1"), "Tested with CrossOver 24.0.1: perfect.")
+        XCTAssertEqual(first("Whisky 2.3"), "Tested with Whisky 2.3: perfect.")
+    }
+
+    // Review I4: a bad stored date gives the plain source, never another month.
+    func testImpossibleMonthGivesPlainSource() {
+        XCTAssertEqual(Verdicts.play(game(crossover: test(.perfect, date: "2021-24-10"))).reasons.first?.source, "AppleGamingWiki")
     }
 
     func testLinuxEvidenceAndNothing() {

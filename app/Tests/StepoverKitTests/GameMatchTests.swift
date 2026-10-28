@@ -18,6 +18,13 @@ final class GameMatchTests: XCTestCase {
         XCTAssertEqual(GameName.normalized("  ELDEN RING  "), "elden ring")
     }
 
+    // Review M7 (promoted): remasters keep their edition, so they never match the original.
+    func testRemasterEditionsAreKept() {
+        XCTAssertEqual(GameName.normalized("Mafia: Definitive Edition"), "mafia definitive edition")
+        XCTAssertEqual(GameName.normalized("Baldur's Gate: Enhanced Edition"), "baldur s gate enhanced edition")
+        XCTAssertEqual(GameName.normalized("Borderlands GOTY"), "borderlands")
+    }
+
     func testMatchByExeThenName() {
         let index = GameIndex(list([entry("steam:1174180", "Red Dead Redemption 2", exes: ["RDR2.exe"]),
                                     entry("steam:1817230", "Hi-Fi RUSH", names: ["HI-Fi RUSH"])]))

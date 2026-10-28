@@ -2,14 +2,14 @@ import Foundation
 
 /// Game names reduced to what they have in common across stores and wikis, for matching on the Mac.
 public enum GameName {
-    /// Longest first, so "goty edition" goes before "goty".
-    static let editions = ["game of the year edition", "goty edition", "goty", "definitive edition", "complete edition",
-                           "ultimate edition", "deluxe edition", "enhanced edition", "anniversary edition"]
+    /// The same game plus extras, longest first ("goty edition" before "goty"). Definitive, enhanced and
+    /// anniversary editions are often remasters, a different game, so they keep their name.
+    static let editions = ["game of the year edition", "goty edition", "goty", "complete edition", "ultimate edition", "deluxe edition"]
 
     /// Case and accents folded, ™ ® © dropped, "&" read as "and", every run of other characters one space,
-    /// and one trailing edition phrase dropped: "The Witcher 3: Wild Hunt – Game of the Year Edition" is
-    /// "the witcher 3 wild hunt". Nothing fuzzier: a wrong match is worse than none.
-    public static func normalized(_ name: String) -> String {
+    /// and (unless `dropEdition` is false) one trailing edition phrase dropped: "The Witcher 3: Wild Hunt – Game
+    /// of the Year Edition" is "the witcher 3 wild hunt". Nothing fuzzier: a wrong match is worse than none.
+    public static func normalized(_ name: String, dropEdition: Bool = true) -> String {
         var text = name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
             .lowercased()
         for mark in ["™", "®", "©"] { text = text.replacingOccurrences(of: mark, with: "") }
@@ -18,7 +18,7 @@ public enum GameName {
             CharacterSet.alphanumerics.contains($0) ? $0 : " "
         }))
         let words = spaced.split(separator: " ").joined(separator: " ")
-        for edition in editions where words.hasSuffix(" " + edition) {
+        for edition in editions where dropEdition && words.hasSuffix(" " + edition) {
             return String(words.dropLast(edition.count + 1))
         }
         return words
@@ -36,7 +36,7 @@ public struct GameIndex: Sendable {
         for game in list.games {
             if let id = game.steam, steam[id] == nil { steam[id] = game }
             for file in Set(game.exes.map { $0.lowercased() }) { exe[file, default: []].append(game) }
-            for key in Set(([game.name] + game.names).map(GameName.normalized)) where !key.isEmpty {
+            for key in Set(([game.name] + game.names).map { GameName.normalized($0) }) where !key.isEmpty {
                 name[key, default: []].append(game)
             }
         }

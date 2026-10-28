@@ -64,6 +64,12 @@ final class SteamStoreTests: XCTestCase {
         XCTAssertNil(SteamStore.searchResults(Data("<html>".utf8)))
     }
 
+    // Review M1 (promoted): Steam's placeholder for a delisted game isn't the game's facts.
+    func testStoreFactsIgnoresNonGames() {
+        let prey = Data(#"{"3970":{"success":true,"data":{"type":"advertising","name":"Prey","steam_appid":3970,"platforms":{"windows":true,"mac":false}}}}"#.utf8)
+        XCTAssertNil(SteamStore.storeFacts(appdetails: prey, appID: 3970, checked: "2026-10-28"))
+    }
+
     func testDeckFacts() {
         XCTAssertEqual(SteamStore.deckFacts(report: rdr2Deck, checked: "2026-10-28"),
                        DeckFacts(category: .playable, controllerWorks: true, checked: "2026-10-28"))

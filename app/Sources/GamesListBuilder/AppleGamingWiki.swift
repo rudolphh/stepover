@@ -19,16 +19,19 @@ public enum AppleGamingWiki {
     public static func parse(title: String, wikitext: String) -> AGWPage? {
         guard let start = wikitext.range(of: "{{Compatibility/macOS") else { return nil }
         var fields: [String: String] = [:], last: String?
+        var depth = 1   // template nesting: a {{Refdevice ...}} can span lines whose own "|key=" aren't fields
         for line in wikitext[start.upperBound...].split(separator: "\n", omittingEmptySubsequences: false).dropFirst() {
             let text = line.trimmingCharacters(in: .whitespaces)
-            if text.hasPrefix("}}") { break }
-            if text.hasPrefix("|"), let equals = text.firstIndex(of: "=") {
+            if depth == 1 && text.hasPrefix("}}") { break }
+            if depth == 1, text.hasPrefix("|"), let equals = text.firstIndex(of: "=") {
                 let key = text[text.index(after: text.startIndex)..<equals].trimmingCharacters(in: .whitespaces).lowercased()
                 fields[key] = text[text.index(after: equals)...].trimmingCharacters(in: .whitespaces)
                 last = key
             } else if let last, !text.isEmpty {
-                fields[last, default: ""] += " " + text   // a notes value that runs onto the next line
+                fields[last, default: ""] += " " + text   // a value that runs onto the next line
             }
+            depth += text.components(separatedBy: "{{").count - text.components(separatedBy: "}}").count
+            if depth < 1 { break }
         }
         var tests = MacTests()
         for (field, path) in methods {
@@ -43,6 +46,22 @@ public enum AppleGamingWiki {
             tests[keyPath: path] = test
         }
         return AGWPage(title: title, steam: steamAppID(wikitext), tests: tests)
+    }
+
+    /// The pages in an API answer to prop=revisions; throws on an error answer, so the run keeps the previous
+    /// list's results instead of losing these pages for a day.
+    public static func pages(revisionsAnswer data: Data) throws -> [AGWPage] {
+        guard let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any], body["error"] == nil,
+              let query = body["query"] as? [String: Any] else {
+            throw Fetch.Failure(description: "AppleGamingWiki answered with an error")
+        }
+        return (query["pages"] as? [[String: Any]] ?? []).compactMap { page in
+            guard let title = page["title"] as? String,
+                  let revision = (page["revisions"] as? [[String: Any]])?.first,
+                  let text = ((revision["slots"] as? [String: Any])?["main"] as? [String: Any])?["content"] as? String
+            else { return nil }
+            return parse(title: title, wikitext: text)
+        }
     }
 
     /// The first number on the Infobox's "|steam appid =" line.
@@ -85,6 +104,8 @@ public enum AppleGamingWiki {
     public static func date(_ text: String) -> String? {
         let parts = text.trimmingCharacters(in: .whitespaces).split(separator: "-")
         if parts.count >= 2, parts.count <= 3, parts.allSatisfy({ Int($0) != nil }), parts[0].count == 4 {
+            // day and month typed the other way round ("2021-24-10") aren't a date
+            guard (1...12).contains(Int(parts[1])!), parts.count == 2 || (1...31).contains(Int(parts[2])!) else { return nil }
             return parts.enumerated().map { $0.offset == 0 ? String($0.element) : String(format: "%02d", Int($0.element)!) }
                 .joined(separator: "-")
         }

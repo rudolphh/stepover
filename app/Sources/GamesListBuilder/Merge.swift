@@ -37,10 +37,23 @@ public enum Merge {
             games[id] = game
         }
 
-        // Steam ids found earlier for pages that don't record one (resolve)
-        let resolved = Dictionary((previous?.games ?? []).compactMap { game in game.agwPage.flatMap { page in game.steam.map { (page, $0) } } }) { a, _ in a }
+        // An app id two wiki pages claim (a typo on the wiki) stays only with the page named like the Steam game,
+        // once Steam has named it; the other pages become wiki-only, which the name search can then place.
+        let collisions = idCollisions(sources.agw ?? [])
+        let previousByID = Dictionary((previous?.games ?? []).map { ($0.id, $0) }) { a, _ in a }
+        // Steam ids found earlier for pages that don't record one (resolve), never a contested id
+        let resolved = Dictionary((previous?.games ?? []).compactMap { game in
+            game.agwPage.flatMap { page in game.steam.flatMap { collisions[$0] == nil ? (page, $0) : nil } }
+        }) { a, _ in a }
         for page in sources.agw ?? [] {
-            let steam = page.steam ?? resolved[page.title]
+            var steam = page.steam
+            if let claimed = steam, collisions[claimed] != nil {
+                let steamName = previousByID["steam:\(claimed)"].flatMap { $0.store != nil ? $0.name : nil }
+                if steamName.map({ GameName.normalized($0, dropEdition: false) == GameName.normalized(page.title, dropEdition: false) }) != true {
+                    steam = nil
+                }
+            }
+            steam = steam ?? resolved[page.title]
             let id = steam.map { "steam:\($0)" } ?? "agw:\(page.title)"
             let tests = page.tests
             edit(id, steam: steam) {
@@ -49,8 +62,17 @@ public enum Merge {
             }
             found[id, default: []].append(page.title)
         }
+        // the one game so far whose names match, for sources that don't know a store id; `except` is the
+        // source's own fallback identity, which the previous list may hold for the same game
+        func sameNamed(_ name: String, except: String? = nil) -> String? {
+            let key = GameName.normalized(name)
+            let same = games.values.filter { game in
+                game.id != except && ([game.name] + game.names + (found[game.id] ?? [])).contains { GameName.normalized($0) == key }
+            }
+            return same.count == 1 ? same[0].id : nil
+        }
         for game in sources.antiCheat ?? [] {
-            let id = game.steam.map { "steam:\($0)" } ?? "acy:\(game.slug)"
+            let id = game.steam.map { "steam:\($0)" } ?? sameNamed(game.name, except: "acy:\(game.slug)") ?? "acy:\(game.slug)"
             edit(id, steam: game.steam) {
                 $0.antiCheat = AntiCheat(names: game.anticheats, status: game.status)
                 $0.epic = game.epic ?? $0.epic
@@ -59,11 +81,7 @@ public enum Merge {
         }
         for fix in sources.fixes {
             var ids = fix.match.steam.map { "steam:\($0)" }
-            if ids.isEmpty {   // no store id: attach to the one game of the same name, if there is one
-                let key = GameName.normalized(fix.name)
-                let same = games.values.filter { game in ([game.name] + game.names + (found[game.id] ?? [])).contains { GameName.normalized($0) == key } }
-                if same.count == 1 { ids = [same[0].id] }
-            }
+            if ids.isEmpty, let same = sameNamed(fix.name) { ids = [same] }   // no store id: the one game of that name
             for id in ids {
                 edit(id, steam: Int(id.dropFirst("steam:".count))) {
                     for exe in fix.match.exe where !$0.exes.contains(where: { $0.caseInsensitiveCompare(exe) == .orderedSame }) {
@@ -82,11 +100,13 @@ public enum Merge {
             let known = game.agwPage != nil || game.antiCheat != nil || game.fix || game.store != nil || game.deck != nil
                 || game.steam.map(charted.contains) == true
             guard known else { return nil }
-            // a Steam name (from store facts) wins, then the sources' names, then what the game was called before
-            let candidates = (game.store != nil ? [game.name] : []) + (found[game.id] ?? []) + [game.name] + game.names
-            game.name = candidates.first { !$0.isEmpty } ?? ""
+            // a Steam name (from store facts) wins, then the sources' names, then what the game was called before;
+            // other names come from this run's sources, and from the previous list only when a source failed
+            let sourced = found[game.id] ?? []
+            let carried = sources.agw == nil || sources.antiCheat == nil ? [game.name] + game.names : []
+            game.name = ((game.store != nil ? [game.name] : []) + sourced + [game.name]).first { !$0.isEmpty } ?? ""
             var seen: Set<String> = [GameName.normalized(game.name)]
-            game.names = candidates.filter { !$0.isEmpty && seen.insert(GameName.normalized($0)).inserted }
+            game.names = (sourced + carried).filter { !$0.isEmpty && seen.insert(GameName.normalized($0)).inserted }
             return game
         }.sorted { $0.id < $1.id }
     }
@@ -94,17 +114,24 @@ public enum Merge {
     /// Wiki-only games (no Steam app id yet) to look up by name on Steam: never searched first, then those
     /// last searched more than `maxAge` days ago.
     public static func steamToSearch(_ entries: [GameEntry], today: String, maxAge: Int = 30, limit: Int) -> [String] {
-        let due = entries.filter { $0.steam == nil && $0.agwPage != nil }
+        // a title another wiki page shares once "(2017)"-style years are dropped ("Star Wars: Battlefront II" and
+        // "Star Wars Battlefront II (2017)") names two games; the search can't tell which Steam game is which
+        func base(_ title: String) -> String {
+            GameName.normalized(title.replacingOccurrences(of: #"\s*\([^)]*\)\s*$"#, with: "", options: .regularExpression), dropEdition: false)
+        }
+        let shared = Set(Dictionary(grouping: entries.compactMap(\.agwPage), by: base).filter { $0.value.count > 1 }.keys)
+        let due = entries.filter { $0.steam == nil && $0.agwPage != nil && !shared.contains(base($0.agwPage!)) }
             .filter { game in game.steamSearched.map { days(from: $0, to: today) > maxAge } ?? true }
         let never = due.filter { $0.steamSearched == nil }
         let stale = due.filter { $0.steamSearched != nil }.sorted { $0.steamSearched! < $1.steamSearched! }
         return (never + stale).prefix(limit).map(\.id)
     }
 
-    /// The one search result whose name is the game's name (GameName.normalized); nil when none or several.
+    /// The one search result whose name is the game's name (GameName.normalized, editions kept, so a
+    /// "Definitive Edition" remake never stands in for the original); nil when none or several.
     public static func pickSteamID(_ results: [(id: Int, name: String)], for name: String) -> Int? {
-        let key = GameName.normalized(name)
-        let same = Set(results.filter { GameName.normalized($0.name) == key }.map(\.id))
+        let key = GameName.normalized(name, dropEdition: false)
+        let same = Set(results.filter { GameName.normalized($0.name, dropEdition: false) == key }.map(\.id))
         return same.count == 1 ? same.first : nil
     }
 
@@ -122,7 +149,7 @@ public enum Merge {
             game.epic = game.epic ?? moving.epic
             game.exes += moving.exes.filter { exe in !game.exes.contains { $0.caseInsensitiveCompare(exe) == .orderedSame } }
             game.fix = game.fix || moving.fix
-            var seen = Set(([game.name] + game.names).map(GameName.normalized))
+            var seen = Set(([game.name] + game.names).map { GameName.normalized($0) })
             game.names += ([moving.name] + moving.names).filter { !$0.isEmpty && seen.insert(GameName.normalized($0)).inserted }
             rest[i] = game
         } else {
@@ -131,6 +158,22 @@ public enum Merge {
             rest.append(game)
         }
         return rest.sorted { $0.id < $1.id }
+    }
+
+    /// The previous list. Nil only when there is none (`path` nil); a path that can't be read or isn't a games
+    /// list throws, so a failed download never makes a run start over and drop every Steam fact.
+    public static func loadPrevious(path: String?) throws -> GamesList? {
+        guard let path else { return nil }
+        guard let data = FileManager.default.contents(atPath: path), let list = GamesList.decode(data) else {
+            throw ListCheckFailure(description: "the previous list (\(path)) isn't a readable games list; not building over it")
+        }
+        return list
+    }
+
+    /// Steam app ids that more than one wiki page claims, with those pages' titles (a typo on the wiki).
+    public static func idCollisions(_ pages: [AGWPage]) -> [Int: [String]] {
+        Dictionary(grouping: pages.filter { $0.steam != nil }, by: { $0.steam! })
+            .filter { $0.value.count > 1 }.mapValues { $0.map(\.title) }
     }
 
     /// Steam app ids whose Steam facts are missing or older than `maxAge` days: never-checked first, then oldest.

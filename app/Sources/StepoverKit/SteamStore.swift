@@ -32,11 +32,12 @@ public enum SteamStore {
         }
     }
 
-    /// Nil when Steam has no data for the game ("success": false) or the body isn't its appdetails.
+    /// Nil when Steam has no data for the game ("success": false), the app isn't a game, or the body isn't its appdetails.
     public static func storeFacts(appdetails: Data, appID: Int, checked: String) -> (name: String, facts: StoreFacts)? {
         guard let root = try? JSONSerialization.jsonObject(with: appdetails) as? [String: Any],
               let app = root[String(appID)] as? [String: Any], app["success"] as? Bool == true,
-              let data = app["data"] as? [String: Any], let name = data["name"] as? String else { return nil }
+              let data = app["data"] as? [String: Any], let name = data["name"] as? String,
+              data["type"] as? String == "game" else { return nil }   // not a delisted game's "advertising" page
         let categories = Set((data["categories"] as? [[String: Any]] ?? []).compactMap { $0["id"] as? Int })
         let controller: ControllerCategory? = categories.contains(fullController) ? .full
             : categories.contains(partialController) ? .partial : nil

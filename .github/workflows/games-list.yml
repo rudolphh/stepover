@@ -34,10 +34,19 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
+      # Only a release that doesn't exist yet is a first run. Any other failure stops the job: building
+      # without the previous list would publish one with every Steam fact and found Steam id gone.
       - name: Previous list
         run: |
-          gh release download games-list --repo "$GITHUB_REPOSITORY" -p games.json -O previous.json \
-            || echo "no previous list (first run)"
+          if found=$(gh release view games-list --repo "$GITHUB_REPOSITORY" 2>&1); then
+            gh release download games-list --repo "$GITHUB_REPOSITORY" -p games.json -O previous.json
+          elif printf '%s' "$found" | grep -q "release not found"; then
+            echo "no games-list release yet (first run)"
+          else
+            echo "$found"
+            echo "can't read the games-list release; not building without the previous list" >&2
+            exit 1
+          fi
 
       - name: Build
         run: |

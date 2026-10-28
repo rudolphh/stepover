@@ -109,6 +109,84 @@ final class MergeTests: XCTestCase {
         XCTAssertEqual(games.first?.mac?.crossover?.rating, .perfect)
     }
 
+    // Review C1: an unreadable previous list must stop the build, not make it a first run.
+    func testLoadPrevious() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("prev-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        XCTAssertNil(try Merge.loadPrevious(path: nil))
+        XCTAssertThrowsError(try Merge.loadPrevious(path: dir.appendingPathComponent("missing.json").path))
+        let garbage = dir.appendingPathComponent("garbage.json")
+        try Data("<html>502</html>".utf8).write(to: garbage)
+        XCTAssertThrowsError(try Merge.loadPrevious(path: garbage.path))
+        let good = dir.appendingPathComponent("good.json")
+        try JSONEncoder().encode(list(count: 3)).write(to: good)
+        XCTAssertEqual(try Merge.loadPrevious(path: good.path)?.games.count, 3)
+    }
+
+    // Review C2: two wiki pages claiming one Steam app id.
+    func testCollidingSteamIDs() {
+        let facts = StoreFacts(macVersion: false, singlePlayer: true, controller: .full, checked: "2026-10-28")
+        let previous = list([GameEntry(id: "steam:239140", name: "Dying Light", steam: 239140, store: facts),
+                             GameEntry(id: "steam:214490", name: "Alien: Isolation", steam: 214490, agwPage: "Alien Isolation", store: facts)])
+        let dyingLight = AGWPage(title: "Dying Light", steam: 239140, tests: MacTests(crossover: MacTest(rating: .playable)))
+        let alien = AGWPage(title: "Alien Isolation", steam: 239140, tests: MacTests(rosetta: MacTest(rating: .perfect)))
+        let games = Merge.entries(BuildSources(agw: [dyingLight, alien], antiCheat: [], fixes: [], mostPlayed: nil), previous: previous)
+        XCTAssertEqual(games.first { $0.id == "steam:239140" }?.agwPage, "Dying Light")
+        XCTAssertNil(games.first { $0.id == "steam:239140" }?.mac?.rosetta)
+        XCTAssertEqual(games.first { $0.id == "steam:214490" }?.mac?.rosetta?.rating, .perfect)   // its earlier resolution
+        XCTAssertEqual(games.first { $0.id == "steam:239140" }?.names, [])
+
+        let zero = AGWPage(title: "Horizon Zero Dawn", steam: 1151640, tests: MacTests(crossover: MacTest(rating: .perfect)))
+        let west = AGWPage(title: "Horizon Forbidden West", steam: 1151640, tests: MacTests(crossover: MacTest(rating: .runs)))
+        let fresh = Merge.entries(BuildSources(agw: [zero, west], antiCheat: [], fixes: [], mostPlayed: nil), previous: nil)
+        XCTAssertEqual(fresh.map(\.id), ["agw:Horizon Forbidden West", "agw:Horizon Zero Dawn"])   // no Steam name to decide by
+        XCTAssertEqual(Merge.idCollisions([zero, west, dyingLight]), [1151640: ["Horizon Zero Dawn", "Horizon Forbidden West"]])
+    }
+
+    // Review I3: AreWeAntiCheatYet games without a Steam id join the same-named game.
+    func testAntiCheatWithoutSteamIDJoinsTheSameNamedGame() {
+        let page = AGWPage(title: "Black Mesa", steam: 362890, tests: MacTests(crossover: MacTest(rating: .perfect)))
+        let blackMesa = AntiCheatGame(name: "Black Mesa", slug: "black-mesa", status: "Running", anticheats: ["VAC"], steam: nil, epic: nil)
+        let games = Merge.entries(BuildSources(agw: [page], antiCheat: [blackMesa, fortnite], fixes: [], mostPlayed: nil), previous: nil)
+        XCTAssertEqual(games.map(\.id), ["acy:fortnite", "steam:362890"])
+        XCTAssertEqual(games.last?.antiCheat?.names, ["VAC"])
+    }
+
+    // The previous list's own acy: entry for the game must not block the join (found in the live run).
+    func testAntiCheatJoinsEvenWhenThePreviousListHadItSeparately() {
+        let page = AGWPage(title: "Black Mesa", steam: 362890, tests: MacTests(crossover: MacTest(rating: .perfect)))
+        let blackMesa = AntiCheatGame(name: "Black Mesa", slug: "black-mesa", status: "Running", anticheats: ["VAC"], steam: nil, epic: nil)
+        let previous = list([GameEntry(id: "acy:black-mesa", name: "Black Mesa", antiCheat: AntiCheat(names: ["VAC"], status: "Running")),
+                             GameEntry(id: "steam:362890", name: "Black Mesa", steam: 362890, agwPage: "Black Mesa")])
+        let games = Merge.entries(BuildSources(agw: [page], antiCheat: [blackMesa], fixes: [], mostPlayed: nil), previous: previous)
+        XCTAssertEqual(games.map(\.id), ["steam:362890"])
+        XCTAssertEqual(games.first?.antiCheat?.names, ["VAC"])
+    }
+
+    // Review I6: names from earlier runs don't stick when every source worked.
+    func testOldAliasesExpire() {
+        let facts = StoreFacts(macVersion: false, singlePlayer: true, controller: .full, checked: "2026-10-28")
+        let previous = list([GameEntry(id: "steam:239140", name: "Dying Light", names: ["Alien Isolation"], steam: 239140, store: facts)])
+        let page = AGWPage(title: "Dying Light", steam: 239140, tests: MacTests(crossover: MacTest(rating: .playable)))
+        XCTAssertEqual(Merge.entries(BuildSources(agw: [page], antiCheat: [], fixes: [], mostPlayed: nil), previous: previous).first?.names, [])
+        XCTAssertEqual(Merge.entries(BuildSources(agw: nil, antiCheat: [], fixes: [], mostPlayed: nil), previous: previous).first?.names,
+                       ["Alien Isolation"])
+    }
+
+    // Review I2: a same-named remake is not the wiki's game, and titles with wiki siblings aren't searched.
+    func testPickSteamIDIsStrict() {
+        XCTAssertNil(Merge.pickSteamID([(id: 1, name: "Mafia: Definitive Edition")], for: "Mafia"))
+        XCTAssertEqual(Merge.pickSteamID([(id: 2, name: "Mafia™")], for: "Mafia"), 2)
+    }
+
+    func testSearchSkipsTitlesWithWikiSiblings() {
+        let entries = [GameEntry(id: "agw:Star Wars: Battlefront II", name: "Star Wars: Battlefront II", agwPage: "Star Wars: Battlefront II"),
+                       GameEntry(id: "steam:1237950", name: "STAR WARS Battlefront II", steam: 1237950, agwPage: "Star Wars Battlefront II (2017)"),
+                       GameEntry(id: "agw:Hollow Knight", name: "Hollow Knight", agwPage: "Hollow Knight")]
+        XCTAssertEqual(Merge.steamToSearch(entries, today: "2026-10-28", limit: 10), ["agw:Hollow Knight"])
+    }
+
     func testCheckRefusesShrunkOrTinyLists() {
         XCTAssertThrowsError(try Merge.check(list(count: 899), previous: list(count: 1000)))
         XCTAssertNoThrow(try Merge.check(list(count: 900), previous: list(count: 1000)))
