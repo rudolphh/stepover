@@ -6,7 +6,8 @@
 # never touched. Prints "ok <check>" or "FAIL <check>: <reason>" and exits 1 at the first failure.
 #
 #   check-runtime.sh <runtime dir> [--previous <runtime dir>] [--metal]
-#   STEPOVER_CLI   the stepover command (default app/.build/release/stepover)
+#   STEPOVER_CLI             the stepover command (default app/.build/release/stepover)
+#   STEPOVER_CHECK_TIMEOUT   seconds each Wine step may take (default 300; slow runners need more)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUNTIME="$(cd "${1:?usage: check-runtime.sh <runtime dir> [--previous <runtime dir>] [--metal]}" && pwd)"
@@ -25,9 +26,10 @@ CLI="${STEPOVER_CLI:-$ROOT/app/.build/release/stepover}"
 fail() { echo "FAIL $1: $2"; exit 1; }
 limit() { perl -e 'alarm shift; exec @ARGV or die "$ARGV[0]: $!\n"' "$@"; }   # limit <seconds> <command...>
 NAME="$(basename "$RUNTIME")"
+TIMEOUT="${STEPOVER_CHECK_TIMEOUT:-300}"
 
 for p in bin/wine bin/wineserver lib/wine/x86_64-unix/cxcompatdb.so lib/d3dmetal/external/D3DMetal.framework \
-         lib/dxmt/x86_64-windows share/wine/mono share/wine/gecko; do
+         lib/d3dmetal/wine/x86_64-windows lib/dxmt/x86_64-windows share/wine/mono share/wine/gecko; do
     [ -e "$RUNTIME/$p" ] || fail files "missing $p"
 done
 if grep -q '^dxvk=' "$RUNTIME/VERSION" && ! grep -q '^dxvk=none$' "$RUNTIME/VERSION"; then
@@ -50,19 +52,19 @@ x86_64-w64-mingw32-gcc -O2 -o "$TMP/hello.exe" "$ROOT/runtime/tests/hello.c"
 
 # boot <bottle> <runtime name>: a new bottle, set up by that runtime.
 boot() {
-    STEPOVER_RUNTIME="$2" limit 300 "$CLI" create "$1" >"$TMP/create-$1.log" 2>&1 || return 1
+    STEPOVER_RUNTIME="$2" limit "$TIMEOUT" "$CLI" create "$1" >"$TMP/create-$1.log" 2>&1 || return 1
     cp "$TMP/hello.exe" "$STEPOVER_HOME/Bottles/$1/drive_c/hello.exe"
 }
 # hello <bottle> <runtime name>: runs hello.exe there and waits; with --wait, stepover run passes the
 # program's output (and the plug-in's debug lines) to its caller, so it lands in $TMP/run-<bottle>.log.
 hello() {
-    STEPOVER_RUNTIME="$2" STEPOVER_COMPAT_DEBUG=1 limit 300 "$CLI" run "$1" 'C:\hello.exe' --wait >"$TMP/run-$1.log" 2>&1
+    STEPOVER_RUNTIME="$2" STEPOVER_COMPAT_DEBUG=1 limit "$TIMEOUT" "$CLI" run "$1" 'C:\hello.exe' --wait >"$TMP/run-$1.log" 2>&1
 }
 
-boot check "$NAME" || fail boot "stepover create failed or took over 300 s: $(tail -3 "$TMP/create-check.log" | tr '\n' ' ')"
+boot check "$NAME" || fail boot "stepover create failed or took over $TIMEOUT s: $(tail -3 "$TMP/create-check.log" | tr '\n' ' ')"
 echo "ok boot"
 
-hello check "$NAME" || fail program "hello.exe failed or took over 300 s"
+hello check "$NAME" || fail program "hello.exe failed or took over $TIMEOUT s"
 grep -q stepover-check "$TMP/run-check.log" || fail program "hello.exe printed nothing"
 echo "ok program"
 
@@ -85,12 +87,12 @@ if [ "$METAL" = 1 ]; then
     "$CLI" graphics check '*' d3dmetal >/dev/null
     for api in d3d11 d3d12; do
         x86_64-w64-mingw32-gcc -O2 -o "$STEPOVER_HOME/Bottles/check/drive_c/$api.exe" "$ROOT/runtime/tests/$api.c" -l"$api" -ldxgi
-        STEPOVER_RUNTIME="$NAME" STEPOVER_COMPAT_DEBUG=1 limit 300 "$CLI" run check "C:\\$api.exe" --wait \
+        STEPOVER_RUNTIME="$NAME" STEPOVER_COMPAT_DEBUG=1 limit "$TIMEOUT" "$CLI" run check "C:\\$api.exe" --wait \
             >"$TMP/run-$api.log" 2>&1 || true
         grep -q "^stepover-compat: $api.exe: backend d3dmetal" "$TMP/run-$api.log" ||
             fail metal "$api.exe didn't run on D3DMetal: $(grep "^stepover-compat: $api.exe" "$TMP/run-$api.log" | tail -1)"
         grep -q "^$api: ok" "$TMP/run-$api.log" ||
-            fail metal "$(grep "^$api:" "$TMP/run-$api.log" | tail -1 || true) (or it crashed or took over 300 s)"
+            fail metal "$(grep "^$api:" "$TMP/run-$api.log" | tail -1 || true) (or it crashed or took over $TIMEOUT s)"
     done
     echo "ok metal"
 fi

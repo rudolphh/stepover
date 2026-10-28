@@ -25,6 +25,13 @@ out="$(runtime/check-runtime.sh "$tmp/cx26.3" --metal 2>&1)" && status=0 || stat
 assert_eq "1" "$status" "broken D3DMetal fails"
 assert_eq "FAIL metal:" "$(printf '%s\n' "$out" | grep '^FAIL' | cut -c1-11)" "caught by the metal check"
 
+rm -rf "$tmp/cx26.3/lib/d3dmetal/wine/x86_64-windows"
+out="$(runtime/check-runtime.sh "$tmp/cx26.3" 2>&1)" && status=0 || status=$?
+assert_eq "FAIL files: missing lib/d3dmetal/wine/x86_64-windows" "$(printf '%s\n' "$out" | grep '^FAIL')" "D3DMetal's Wine DLLs are checked even without --metal"
+
+out="$(STEPOVER_CHECK_TIMEOUT=1 runtime/check-runtime.sh "$INSTALLED" 2>&1)" && status=0 || status=$?
+assert_eq "FAIL boot: stepover create failed or took over 1 s" "$(printf '%s\n' "$out" | grep '^FAIL' | cut -c1-50)" "the time limit is a setting"
+
 rm -rf "$tmp/cx26.3/lib/d3dmetal"
 out="$(runtime/check-runtime.sh "$tmp/cx26.3" 2>&1)" && status=0 || status=$?
 assert_eq "1" "$status" "runtime without D3DMetal fails"

@@ -92,8 +92,15 @@ jobs:
             echo "STARTED=$(date +%s)"
           } >> "$GITHUB_ENV"
 
-      - name: Rosetta
-        run: arch -x86_64 /usr/bin/true 2>/dev/null || softwareupdate --install-rosetta --agree-to-license
+      - name: Preflight (Rosetta and free disk)
+        env:
+          MIN_DISK_GB: ${{ vars.STEPOVER_CI_MIN_DISK_GB || '15' }}
+        run: |
+          arch -x86_64 /usr/bin/true 2>/dev/null || softwareupdate --install-rosetta --agree-to-license
+          arch -x86_64 /usr/bin/true 2>/dev/null || { echo "Rosetta isn't available on this runner"; exit 1; }
+          free="$(df -g / | awk 'NR==2 {print $4}')"
+          [ "$free" -ge "$MIN_DISK_GB" ] || { echo "only $free GB free; the build needs $MIN_DISK_GB GB"; exit 1; }
+          echo "free disk: $free GB"
 
       - name: Build tools
         run: brew install mingw-w64 bison flex ninja cmake pkgconf autoconf automake libtool llvm lld nasm meson glslang freetype xz
@@ -154,15 +161,28 @@ jobs:
       - name: The stepover command
         run: swift build -c release --package-path app --product stepover
 
+      # Set the repository variable STEPOVER_CI_METAL to false if the runner's virtual GPU can't run D3DMetal.
+      - name: Metal
+        env:
+          CI_METAL: ${{ vars.STEPOVER_CI_METAL }}
+        run: |
+          if [ "$CI_METAL" = false ]; then
+            echo "CHECK_METAL=skip metal: turned off by the STEPOVER_CI_METAL repository variable" >> "$GITHUB_ENV"
+          elif swift runtime/tests/metal-probe.swift | grep -q '^metal-queue=ok'; then
+            echo "CHECK_METAL=yes" >> "$GITHUB_ENV"
+          else
+            echo "CHECK_METAL=skip metal: no Metal device on this runner" >> "$GITHUB_ENV"
+          fi
+
       - name: Checks
         run: |
           name="$(bash -c 'source runtime/config.sh; echo "$RUNTIME_NAME"')"
           echo "RUNTIME_NAME=$name" >> "$GITHUB_ENV"
           metal=()
-          if swift runtime/tests/metal-probe.swift | grep -q '^metal-queue=ok'; then metal=(--metal); fi
+          [ "$CHECK_METAL" != yes ] || metal=(--metal)
           mkdir -p "$OUT"
           runtime/check-runtime.sh "$STEPOVER_RUNTIMES/$name" --previous "$PREVIOUS_RUNTIME" "${metal[@]}" | tee "$OUT/check.log"
-          [ ${#metal[@]} -gt 0 ] || echo "skip metal: no Metal device on this runner" | tee -a "$OUT/check.log"
+          [ "$CHECK_METAL" = yes ] || echo "$CHECK_METAL" | tee -a "$OUT/check.log"
 
       - name: Pack (only reached when every check passed)
         run: |
