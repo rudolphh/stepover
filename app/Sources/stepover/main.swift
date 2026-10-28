@@ -29,7 +29,7 @@ usage: stepover <command> ...
   fixes share <bottle> <program>        open GitHub with that fix filled in, to propose it
   fixes folder                          where your own fixes go (applied as written)
   components                            list the common ones
-  runtime [status|install [<name>] [--from <file or URL>]]
+  runtime [status|install [<name>] [--from <file or URL>]|remove <name>]
                                         the Wine runtime the app downloads on first launch
   runtimes                              installed Wine runtimes
 
@@ -187,6 +187,17 @@ do {
         let index = RuntimeIndex.load()
         let installed = Runtime.installed().map(\.name)
         switch sub {
+        case "remove":
+            guard args.count == 2, let runtime = Runtime.installed().first(where: { $0.name == args[1] }) else {
+                fail("runtime remove <installed runtime>")
+            }
+            let bottles = Bottle.all()
+            let users = RuntimeCatalog.users(of: runtime.name, bottles: bottles.map { bottle in
+                let config = bottle.loadConfig()
+                return (bottle.name, config.runtime, bottle.runtime(config)?.name)
+            })
+            try RuntimeCatalog.remove(runtime, bottles: bottles)
+            print("removed \(runtime.name)" + (users.isEmpty ? "" : "; \(users.joined(separator: ", ")) now use \(Runtime.resolve(nil)?.name ?? "no runtime")"))
         case "status":
             if index.runtimes.isEmpty { fail("no runtime list (this build has none bundled; set STEPOVER_RUNTIME_INDEX)") }
             for entry in index.runtimes {
@@ -225,7 +236,7 @@ do {
             FileHandle.standardError.write(Data("\n".utf8))
             print("installed \(try outcome.get().summary)")
         default:
-            fail("runtime status | runtime install [<name>] [--from <file or URL>]")
+            fail("runtime status | runtime install [<name>] [--from <file or URL>] | runtime remove <name>")
         }
 
     case "install":

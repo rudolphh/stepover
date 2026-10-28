@@ -18,6 +18,7 @@ final class Store: ObservableObject {
     /// Fixes matching each bottle, including ones turned off there (the toggles show which).
     @Published var fixCandidates: [String: [MatchedFix]] = [:]
     @Published var showFixSources = false
+    @Published var showRuntimes = false
     /// Fixes skipped as invalid and flagged items left out, from the last load.
     @Published var fixNotes: [String] = []
     /// The runtime list (cached copy, else the runtime this app was built with); refreshed from GitHub at launch.
@@ -35,6 +36,29 @@ final class Store: ObservableObject {
     }
 
     var selected: Bottle? { bottles.first { $0.id == selection } }
+
+    /// Each bottle's pinned runtime and the one it runs on now, for the Wine Runtimes window.
+    var runtimeUsers: [(name: String, pinned: String?, resolved: String?)] {
+        bottles.map { bottle in
+            let config = config(bottle)
+            return (bottle.name, config.runtime, bottle.runtime(config)?.name)
+        }
+    }
+
+    func removeRuntime(_ runtime: Runtime) {
+        do { try RuntimeCatalog.remove(runtime, bottles: bottles) } catch { alert = error.localizedDescription }
+        reload()
+    }
+
+    /// Moves every bottle off a pulled runtime to Newest, forgetting that it ran there (Runtime.choose would
+    /// otherwise keep it on the pulled runtime).
+    func switchBottles(off runtime: String) {
+        for bottle in bottles where config(bottle).runtime == runtime || bottle.runtime(config(bottle))?.name == runtime {
+            update(bottle) { $0.runtime = nil }
+            bottle.lastRuntime = nil
+        }
+        reload()
+    }
 
     /// The runtime a first install downloads.
     var manifest: RuntimeManifest? { index.current }

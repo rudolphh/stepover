@@ -73,9 +73,7 @@ public struct Bottle: Hashable, Identifiable, Sendable {
     /// True while the bottle's wineserver holds the lock in its server directory
     /// (/tmp/.wine-<uid>/server-<dev>-<inode>/lock), whichever Wine started it.
     public var isRunning: Bool {
-        var st = stat()
-        guard stat(url.path, &st) == 0 else { return false }
-        let lock = "/tmp/.wine-\(getuid())/server-\(String(UInt32(bitPattern: st.st_dev), radix: 16))-\(String(st.st_ino, radix: 16))/lock"
+        guard let lock = serverLockPath else { return false }
         let fd = open(lock, O_RDWR)
         guard fd >= 0 else { return false }
         defer { close(fd) }
@@ -84,6 +82,13 @@ public struct Bottle: Hashable, Identifiable, Sendable {
         fl.l_whence = Int16(SEEK_SET)
         guard fcntl(fd, F_GETLK, &fl) == 0 else { return false }
         return fl.l_type != Int16(F_UNLCK)
+    }
+
+    /// The wineserver's lock file for this bottle, named by the folder's device and inode.
+    var serverLockPath: String? {
+        var st = stat()
+        guard stat(url.path, &st) == 0 else { return nil }
+        return "/tmp/.wine-\(getuid())/server-\(String(UInt32(bitPattern: st.st_dev), radix: 16))-\(String(st.st_ino, radix: 16))/lock"
     }
 
     // MARK: registry-backed display settings

@@ -20,6 +20,7 @@ struct StepoverApp: App {
         .commands {
             CommandGroup(after: .newItem) {
                 Button("Reload Bottles") { store.reload() }.keyboardShortcut("r")
+                Button("Wine Runtimes…") { store.showRuntimes = true }
             }
             CommandMenu("Fixes") {
                 Button("Update Fixes") { store.updateFixes() }
@@ -104,6 +105,7 @@ struct ContentView: View {
         .sheet(isPresented: $showImport) { ImportSheet() }
         .sheet(isPresented: $showCreate) { CreateSheet() }
         .sheet(isPresented: $store.showFixSources) { FixSourcesSheet() }
+        .sheet(isPresented: $store.showRuntimes) { RuntimesView() }
     }
 }
 
