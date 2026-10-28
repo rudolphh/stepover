@@ -123,6 +123,36 @@ on it, with a button to switch.
 `stepover-compat.conf` starts with `version = 3`; a runtime's `VERSION` records the format its plug-in
 reads (`compat_format`), so the Fixes section can say when a bottle's runtime can't apply a fix.
 
+## Games list
+
+What Stepover knows about a game before anyone plays it here comes from one file, `games.json`, built
+every day by the Games list workflow (`.github/workflows/games-list.yml`, the `games-list` command in
+`app/Sources/games-list`) and published as the asset of the rolling release `games-list`. Each entry has
+the game's names, whichever store ids are known (Steam, Epic) and the exe names Stepover's fix list uses,
+plus:
+
+- **Mac test results** from AppleGamingWiki's Compatibility/macOS ratings (native, Rosetta 2, CrossOver,
+  Wine; the tester's Mac, method and date). Pages that don't record a Steam app id are matched to Steam by
+  the store search, taking only an exact same-named result.
+- **Anti-cheat** from AreWeAntiCheatYet. Its Linux status doesn't carry over: Proton's anti-cheat support
+  uses pieces that don't exist under Wine on a Mac.
+- **Steam facts** (Mac version, single-player, controller support) and the **Steam Deck** result, refreshed
+  about weekly per game within a request budget (`STEPOVER_GAMES_STEAM_BUDGET`, default 1200 a run, one every
+  `STEPOVER_GAMES_STEAM_DELAY` seconds, default 1.5).
+- Whether the **fix list** has a fix for it.
+
+A source that fails keeps the previous list's data, and a list that shrank by more than 10% isn't published.
+ProtonDB isn't used: its data is ODbL, which can't be combined with AppleGamingWiki's CC BY-NC-SA 3.0. The
+list keeps that license and credits both sources (its `credits` field).
+
+The app downloads the list at most once a day (`STEPOVER_GAMES_LIST`, a URL or a file path, overrides where
+from), keeps the last good copy in `<STEPOVER_HOME>/games-list.json`, and falls back to the snapshot built
+into `Stepover.app/Contents/Resources/games.json` (release builds; `STEPOVER_GAMES_JSON` for
+`app/build-app.sh`). Matching a program to a game happens on the Mac: Steam app id, else the exe name, else
+the normalized name, and no match rather than a guess when two games fit. Nothing about which games you
+have is sent anywhere. The verdicts (will it play, does it work with a controller) are `Verdicts` in
+StepoverKit; their rules and wording are in `docs/superpowers/specs/2026-10-28-library-design.md`.
+
 ## Rebuild
 
     runtime/build-deps.sh && runtime/build-wine.sh && runtime/build-dxvk.sh && runtime/install-runtime.sh

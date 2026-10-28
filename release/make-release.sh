@@ -2,6 +2,7 @@
 # Builds everything a Stepover release needs into release/dist/<version>/, without publishing:
 #   Stepover-<version>.zip              the app, with the runtime list's current runtime embedded as
 #                                       runtime.json (what a first launch downloads when it can't reach the list)
+#                                       and today's games list as games.json (from the games-list release)
 #   sources/                          the source archives the LGPL obligations call for
 #   tap/Casks/stepover.rb               the Homebrew cask for the tap repository
 #   SHA256SUMS
@@ -30,10 +31,14 @@ json.dump(current[-1], open(sys.argv[2], "w"), indent=2)
 PY
 RT_SIZE="$(/usr/bin/python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["size"])' "$OUT/runtime.json")"
 
+echo "== games list (the snapshot a first launch uses offline)"
+curl -fsSL -o "$OUT/games.json" "https://github.com/$REPO/releases/download/games-list/games.json" \
+    || { echo "no games list published yet: run the Games list workflow" >&2; exit 1; }
+
 echo "== app"
 STEPOVER_APP="$OUT/Stepover.app" STEPOVER_BIN=none STEPOVER_BUNDLE_ID="$BUNDLE_ID" STEPOVER_VERSION="$VERSION" \
     STEPOVER_SOURCE_URL="https://github.com/$REPO" STEPOVER_SPONSOR_URL="https://github.com/sponsors/$OWNER" \
-    STEPOVER_RUNTIME_JSON="$OUT/runtime.json" \
+    STEPOVER_RUNTIME_JSON="$OUT/runtime.json" STEPOVER_GAMES_JSON="$OUT/games.json" \
     "$ROOT/app/build-app.sh"
 APP_FILE="Stepover-$VERSION.zip"
 (cd "$OUT" && ditto -c -k --norsrc --noextattr --noacl --keepParent Stepover.app "$APP_FILE")

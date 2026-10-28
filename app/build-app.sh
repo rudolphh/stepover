@@ -7,6 +7,7 @@
 #   STEPOVER_SOURCE_URL    shown under Help > Stepover Source Code
 #   STEPOVER_SPONSOR_URL   opened by Help > Support Stepover (set it empty to leave the item out)
 #   STEPOVER_RUNTIME_JSON  runtime manifest to embed (release builds; see release/make-release.sh)
+#   STEPOVER_GAMES_JSON    games list to embed (release builds): what the app uses until it downloads a newer one
 set -eu
 SRC="${0:A:h}"
 APP="${STEPOVER_APP:-$HOME/Applications/Stepover.app}"
@@ -27,6 +28,7 @@ mkdir -p "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources"
 cp "$OUT/StepoverApp" "$STAGE/Contents/MacOS/Stepover"
 cp "$OUT/stepover" "$STAGE/Contents/MacOS/stepover-cli"   # "stepover" would collide with "Stepover"
 if [ -n "${STEPOVER_RUNTIME_JSON:-}" ]; then cp "$STEPOVER_RUNTIME_JSON" "$STAGE/Contents/Resources/runtime.json"; fi
+if [ -n "${STEPOVER_GAMES_JSON:-}" ]; then cp "$STEPOVER_GAMES_JSON" "$STAGE/Contents/Resources/games.json"; fi
 # the fix list, used until the app downloads a newer one (FixLibrary): fix files and their licenses
 rsync -a --prune-empty-dirs --include '*/' --include '*.json' --include 'LICENSE' --exclude '*' \
     "$SRC/../fixes/" "$STAGE/Contents/Resources/fixes/"
