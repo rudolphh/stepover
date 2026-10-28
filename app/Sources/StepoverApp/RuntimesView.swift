@@ -74,3 +74,45 @@ struct RuntimesView: View {
         }
     }
 }
+
+/// The bottle page's Wine version: Newest (follows new runtimes) or one installed runtime, with what that means.
+struct WineVersionPicker: View {
+    @EnvironmentObject var store: Store
+    let bottle: Bottle
+
+    var body: some View {
+        let config = store.config(bottle)
+        let installed = Runtime.installed().map(\.name)
+        let pulled = store.index.pulled
+        let newest = Runtime.choose(pinned: nil, lastUsed: bottle.lastRuntime, installed: installed, pulled: pulled,
+                                    preferred: Paths.defaultRuntimeName)
+        let state = RuntimeCatalog.state(pinned: config.runtime, resolved: bottle.runtime(config)?.name,
+                                         installed: installed, index: store.index)
+        Picker("Wine version", selection: Binding(get: { config.runtime ?? "" },
+                                                  set: { value in store.update(bottle) { $0.runtime = value.isEmpty ? nil : value } })) {
+            Text("Newest (\(newest ?? "none installed"))").tag("")
+            ForEach(installed.reversed(), id: \.self) { name in
+                Text(pulled.contains(name) ? "\(name) (pulled)" : name).tag(name)
+            }
+            if let pin = config.runtime, !installed.contains(pin) { Text("\(pin) (not installed)").tag(pin) }
+        }
+        switch state {
+        case .pinned(let name, let newer?):
+            HStack {
+                Text("On \(name); \(newer) is newer.").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("Use Newest") { store.useNewest(bottle) }
+            }
+        case .missingPin(let name, let using):
+            Text("\(name) isn't installed; using \(using ?? "no runtime").").font(.caption).foregroundStyle(.secondary)
+        case .onPulled(let name, let note, let suggested):
+            HStack {
+                Text("\(name) was pulled\(note.map { ": \($0)" } ?? ".")").font(.caption)
+                Spacer()
+                if let suggested { Button("Switch to \(suggested)") { store.useNewest(bottle) } }
+            }
+        default:
+            EmptyView()
+        }
+    }
+}

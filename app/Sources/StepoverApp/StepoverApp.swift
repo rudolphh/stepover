@@ -146,6 +146,7 @@ struct BottleView: View {
             }
 
             Section("Bottle") {
+                WineVersionPicker(bottle: bottle)
                 Picker("Default graphics", selection: Binding(get: { config.graphics }, set: { value in store.update(bottle) { $0.graphics = value } })) {
                     ForEach(Backend.allCases) { Text($0.label).tag($0) }
                 }
@@ -250,7 +251,7 @@ struct BottleView: View {
 
             Section("About this bottle") {
                 LabeledContent("Status", value: running ? "Running" : "Idle")
-                LabeledContent("Wine", value: bottle.runtime(config)?.summary ?? "No runtime installed")
+                LabeledContent("Wine", value: bottle.runtime(config).map { "\($0.name): \($0.summary)" } ?? "No runtime installed")
                 if let origin = config.origin { LabeledContent("Origin", value: origin) }
                 LabeledContent("Folder", value: bottle.url.path).textSelection(.enabled)
             }

@@ -54,10 +54,17 @@ final class Store: ObservableObject {
     /// otherwise keep it on the pulled runtime).
     func switchBottles(off runtime: String) {
         for bottle in bottles where config(bottle).runtime == runtime || bottle.runtime(config(bottle))?.name == runtime {
-            update(bottle) { $0.runtime = nil }
-            bottle.lastRuntime = nil
+            useNewest(bottle)
         }
         reload()
+    }
+
+    /// Sets a bottle to Newest and forgets the runtime it last ran on, so it moves to the newest good runtime
+    /// even from a pulled one.
+    func useNewest(_ bottle: Bottle) {
+        update(bottle) { $0.runtime = nil }
+        bottle.lastRuntime = nil
+        objectWillChange.send()
     }
 
     /// The runtime a first install downloads.

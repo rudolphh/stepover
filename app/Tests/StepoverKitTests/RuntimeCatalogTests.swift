@@ -66,4 +66,37 @@ final class RuntimeCatalogTests: XCTestCase {
         try RuntimeCatalog.remove(runtime, bottles: [Bottle(url: bottleURL)], resolved: { _ in "cx26.3" })
         XCTAssertFalse(FileManager.default.fileExists(atPath: runtime.url.path))
     }
+
+    private func index(pulled: String? = nil, note: String? = nil) -> RuntimeIndex {
+        RuntimeIndex(runtimes: ["cx26.3", "cx26.4"].map { name in
+            var m = RuntimeManifest(name: name, url: "https://example.com/\(name).tar.xz", sha256: String(repeating: "a", count: 64), size: 1, summary: nil)
+            if name == pulled { m.status = .pulled; m.note = note }
+            return m
+        })
+    }
+
+    func testStateNewest() {
+        XCTAssertEqual(RuntimeCatalog.state(pinned: nil, resolved: "cx26.4", installed: ["cx26.3", "cx26.4"], index: index()), .newest("cx26.4"))
+    }
+
+    func testStatePinnedBehind() {
+        XCTAssertEqual(RuntimeCatalog.state(pinned: "cx26.3", resolved: "cx26.3", installed: ["cx26.3", "cx26.4"], index: index()),
+                       .pinned("cx26.3", newer: "cx26.4"))
+    }
+
+    func testStatePinnedLatest() {
+        XCTAssertEqual(RuntimeCatalog.state(pinned: "cx26.4", resolved: "cx26.4", installed: ["cx26.3", "cx26.4"], index: index()),
+                       .pinned("cx26.4", newer: nil))
+    }
+
+    func testStateMissingPin() {
+        XCTAssertEqual(RuntimeCatalog.state(pinned: "cx26.2", resolved: "cx26.4", installed: ["cx26.3", "cx26.4"], index: index()),
+                       .missingPin("cx26.2", using: "cx26.4"))
+    }
+
+    func testStateOnPulled() {
+        XCTAssertEqual(RuntimeCatalog.state(pinned: nil, resolved: "cx26.4", installed: ["cx26.3", "cx26.4"],
+                                            index: index(pulled: "cx26.4", note: "breaks RDR2")),
+                       .onPulled("cx26.4", note: "breaks RDR2", suggested: "cx26.3"))
+    }
 }
