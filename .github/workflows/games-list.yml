@@ -1,0 +1,64 @@
+# Builds the games list (games.json: Mac test results, anti-cheat, Steam and Steam Deck facts, fixes) every
+# day and publishes it as the asset of the rolling release "games-list", which the app downloads at most
+# once a day (docs/superpowers/specs/2026-10-28-library-design.md, Data). The previous list feeds the next
+# run, so a source that fails keeps its old data, and a list that shrank by more than 10% is not published.
+name: Games list
+
+on:
+  schedule:
+    - cron: "41 10 * * *"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Upload games.json to the games-list release (off = build and keep it as an artifact only)
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: games-list
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Previous list
+        run: |
+          gh release download games-list --repo "$GITHUB_REPOSITORY" -p games.json -O previous.json \
+            || echo "no previous list (first run)"
+
+      - name: Build
+        run: |
+          cd app
+          previous=()
+          [ -f ../previous.json ] && previous=(--previous ../previous.json)
+          swift run -c release games-list build --fixes ../fixes --out ../games.json "${previous[@]}"
+          swift run -c release games-list verify ../games.json
+
+      - name: Publish
+        if: github.event_name == 'schedule' || inputs.publish
+        run: |
+          if ! gh release view games-list --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create games-list --repo "$GITHUB_REPOSITORY" --title "Games list" --prerelease --latest=false \
+              --notes "Updated daily by the Games list workflow. Mac test results from AppleGamingWiki (CC BY-NC-SA 3.0), anti-cheat data from AreWeAntiCheatYet (MIT)."
+          fi
+          gh release upload games-list games.json --clobber --repo "$GITHUB_REPOSITORY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: games-list
+          path: games.json
+          retention-days: 30
+          if-no-files-found: error
