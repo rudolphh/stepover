@@ -10,6 +10,12 @@ public struct RuntimeManifest: Codable, Sendable {
     public var sha256: String
     public var size: Int64       // bytes, for progress and the download prompt
     public var summary: String?
+    // From the runtime list (runtime/index.json, RuntimeIndex); absent in older manifests.
+    public var released: String?
+    public var status: RuntimeStatus?
+    public var note: String?          // shown to users, for example why a runtime was pulled
+    public var minApp: String?        // the oldest Stepover that can use this runtime
+    public var compatFormat: Int?     // the stepover-compat.conf format its compat plug-in reads
 
     public static func bundled() -> RuntimeManifest? {
         let env = ProcessInfo.processInfo.environment

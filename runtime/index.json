@@ -1,0 +1,15 @@
+{
+  "runtimes": [
+    {
+      "name": "cx26.3",
+      "url": "https://github.com/rudolphh/stepover/releases/download/v0.2.2/stepover-runtime-cx26.3.tar.xz",
+      "sha256": "18e87ca7dc974796d2c4297b24ee7f1bbf920921e84c9870d3d04a884bbbfac3",
+      "size": 289986340,
+      "summary": "Wine version 11.0, D3DMetal 4.0b3, DXMT 0.80, DXVK 1.10.3",
+      "released": "2026-10-27",
+      "status": "current",
+      "minApp": "0.2.0",
+      "compatFormat": 3
+    }
+  ]
+}

@@ -24,9 +24,7 @@ public enum FixLibrary {
         if let env = ProcessInfo.processInfo.environment["STEPOVER_FIXES_SOURCE"], !env.isEmpty {
             return FixSource(name: "official", url: env)
         }
-        let repo = (Paths.appBundle?.object(forInfoDictionaryKey: "StepoverSourceURL") as? String)
-            .flatMap { URL(string: $0) }.map { $0.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) }
-        return FixSource(name: "official", url: "github:\(repo ?? "rudolphh/stepover")")
+        return FixSource(name: "official", url: "github:\(Paths.sourceRepository)")
     }
 
     public static func addedSources() -> [FixSource] {

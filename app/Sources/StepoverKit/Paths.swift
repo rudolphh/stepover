@@ -10,6 +10,13 @@ public enum Paths {
         return fallback
     }
 
+    /// owner/name of the repository Stepover.app was built from (its StepoverSourceURL), else rudolphh/stepover.
+    public static var sourceRepository: String {
+        (appBundle?.object(forInfoDictionaryKey: "StepoverSourceURL") as? String)
+            .flatMap { URL(string: $0) }.map { $0.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) }
+            .flatMap { $0.isEmpty ? nil : $0 } ?? "rudolphh/stepover"
+    }
+
     /// STEPOVER_HOME, default ~/Library/Application Support/Stepover
     public static var root: URL {
         url("STEPOVER_HOME", default: home.appendingPathComponent("Library/Application Support/Stepover"))
