@@ -27,18 +27,20 @@ public enum Library {
         for (bottle, config) in bottles {
             let apps = steamApps(bottle)
             let client = config.programs.first { fileName($0.exe).lowercased() == "steam.exe" } ?? SteamLibrary.client(in: bottle)
+            let games = apps.filter { !nonGames.contains($0.id) }
             for program in config.programs where fileName(program.exe).lowercased() != "steam.exe" {
-                // a launcher made from a Steam game's own exe is that Steam game's tile
+                // a launcher made from a Steam game's own exe is that Steam game's tile (when Steam can start it)
                 let exe = program.exe.lowercased()
-                if apps.contains(where: { exe.hasPrefix($0.windowsFolder.lowercased() + "\\") }) { continue }
+                if client != nil, games.contains(where: { exe.hasPrefix($0.windowsFolder.lowercased() + "\\") }) { continue }
                 let entry = index.match(name: program.name, exe: fileName(program.exe)) ?? index.match(name: bottle.name, exe: nil)
                     ?? learned?.match(name: program.name, exe: nil)
                 out.append(LibraryGame(id: "\(bottle.id)|\(program.name)", name: program.name, bottle: bottle, kind: .program(program),
                                        entry: entry, lastPlayed: played(bottle, program.name), steamAppID: entry?.steam, launch: program))
             }
             if let client {
-                for app in apps {
-                    let launch = Program(name: app.name, exe: client.exe, args: ["-applaunch", String(app.id)])
+                for app in games {
+                    let launch = Program(name: app.name, exe: client.exe, args: client.args + ["-applaunch", String(app.id)],
+                                         workdir: client.workdir, graphics: client.graphics, env: client.env)
                     let entry = index.entry(steam: app.id) ?? index.match(name: app.name, exe: nil) ?? learned?.entry(steam: app.id)
                     out.append(LibraryGame(id: "\(bottle.id)|steam:\(app.id)", name: app.name, bottle: bottle, kind: .steamGame(app),
                                            entry: entry, lastPlayed: played(bottle, app.name), steamAppID: app.id, launch: launch))
@@ -73,6 +75,9 @@ public enum Library {
         }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
+    /// Steam apps that aren't games: Steamworks Common Redistributables, which Steam installs for nearly everyone.
+    static let nonGames: Set<Int> = [228980]
+
     static func fileName(_ windowsPath: String) -> String {
         String(windowsPath.split(separator: "\\").last ?? Substring(windowsPath))
     }
@@ -80,6 +85,41 @@ public enum Library {
 
 /// How a tile's line looks: each paired with its words, never shown by color alone.
 public enum TileTone: Sendable { case good, maybe, caution, bad, mac, unknown }
+
+extension TileTone {
+    public typealias RGB = (red: Double, green: Double, blue: Double)
+
+    /// The tone's text color, chosen so it reads at 4.5:1 on its own pill in a light or dark window.
+    public func rgb(dark: Bool) -> RGB {
+        func hex(_ value: Int) -> RGB { (Double(value >> 16 & 0xFF) / 255, Double(value >> 8 & 0xFF) / 255, Double(value & 0xFF) / 255) }
+        switch self {
+        case .good: return hex(dark ? 0x30D158 : 0x16692C)
+        case .maybe: return hex(dark ? 0x64A8FF : 0x0055B3)
+        case .caution: return hex(dark ? 0xFF9F0A : 0x7A3F00)
+        case .bad: return hex(dark ? 0xFF6B60 : 0x9E1F18)
+        case .mac: return hex(dark ? 0xD58BFF : 0x7A33B0)
+        case .unknown: return hex(dark ? 0xA1A1A6 : 0x5E5E63)
+        }
+    }
+
+    /// The pill's background: the tone at this opacity over the window.
+    public var pillAlpha: Double { self == .unknown ? 0.12 : 0.16 }
+
+    public static func windowBackground(dark: Bool) -> RGB { dark ? (0.118, 0.118, 0.118) : (0.925, 0.925, 0.925) }
+
+    public static func blend(_ color: RGB, over background: RGB, alpha: Double) -> RGB {
+        (color.red * alpha + background.red * (1 - alpha), color.green * alpha + background.green * (1 - alpha),
+         color.blue * alpha + background.blue * (1 - alpha))
+    }
+
+    /// WCAG contrast ratio.
+    public static func contrast(_ a: RGB, _ b: RGB) -> Double {
+        func channel(_ c: Double) -> Double { c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
+        func luminance(_ c: RGB) -> Double { 0.2126 * channel(c.red) + 0.7152 * channel(c.green) + 0.0722 * channel(c.blue) }
+        let (x, y) = (luminance(a), luminance(b))
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+}
 
 extension PlayVerdict.Kind {
     /// The tile's line; the detail panel shows the full headline.

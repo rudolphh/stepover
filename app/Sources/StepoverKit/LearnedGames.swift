@@ -59,3 +59,36 @@ public enum SteamLookup {
         return GameEntry(id: "steam:\(id)", name: steamName, names: steamName == name ? [] : [name], steam: id, store: facts, deck: deck)
     }
 }
+
+public enum LookupOutcome: Equatable, Sendable { case finished, stopped }
+
+extension LearnedGames {
+    /// Seconds between requests to Steam's store from the app (its informal limit is about 200 per 5 minutes).
+    public static let steamSpacing: Double = 1.5
+
+    /// Looks up at most `limit` games (the rest wait for the next launch), pausing before every request, and
+    /// hands back the record after each game so it can be saved and shown at once. Stops at the first failure
+    /// to reach Steam (offline, refused, rate-limited) without recording anything for that game.
+    public mutating func lookUp(_ wanted: [(name: String, appID: Int?)], today: String, limit: Int = 20,
+                                fetch: @escaping SteamLookup.Fetch = SteamLookup.live,
+                                pause: @escaping @Sendable () async -> Void,
+                                progress: (LearnedGames) -> Void) async -> LookupOutcome {
+        let paced: SteamLookup.Fetch = { url in
+            await pause()
+            return try await fetch(url)
+        }
+        for game in wanted.prefix(limit) {
+            do {
+                if let entry = try await SteamLookup.learn(name: game.name, appID: game.appID, today: today, fetch: paced) {
+                    entries.append(entry)
+                } else {
+                    misses[GameName.normalized(game.name)] = today
+                }
+            } catch {
+                return .stopped
+            }
+            progress(self)
+        }
+        return .finished
+    }
+}

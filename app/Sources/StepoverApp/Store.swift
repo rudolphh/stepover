@@ -32,9 +32,12 @@ final class Store: ObservableObject {
     @Published var library: [LibraryGame] = []
     @Published var hidden = Set(LibraryState.load().hidden)
     @Published var showHidden = false
-    /// View > Bottles: today's bottle pages instead of the Library (remembered).
-    @Published var showBottles = UserDefaults.standard.bool(forKey: "showBottles") {
-        didSet { UserDefaults.standard.set(showBottles, forKey: "showBottles") }
+    /// The bottle pages instead of the Library. Remembered only when chosen from the View menu or the Library
+    /// button: a tile's Settings opens them for now without changing what the app opens on.
+    @Published var showBottles = UserDefaults.standard.bool(forKey: "showBottles")
+    /// View > Look Up Unknown Games on Steam (on unless switched off).
+    @Published var lookUpUnknown = UserDefaults.standard.object(forKey: "lookUpUnknownGames") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(lookUpUnknown, forKey: "lookUpUnknownGames"); if lookUpUnknown { lookUpUnknownGames() } }
     }
     /// Cover art by Steam app id, filled in as downloads land.
     @Published var art: [Int: NSImage] = [:]
@@ -50,6 +53,7 @@ final class Store: ObservableObject {
     /// Installed games the list doesn't know, looked up once on Steam's store from this Mac (LearnedGames).
     private var learned = LearnedGames.load()
     private var lookingUp = false
+    private var lookupStopped = false   // Steam couldn't be reached this launch
     var gamesCredits: [String] { gamesList.credits }
 
     init() {
@@ -153,61 +157,61 @@ final class Store: ObservableObject {
         lookUpUnknownGames()
     }
 
-    /// Asks Steam's store about installed games the list doesn't know, one a second, exact matches only; offline
-    /// stops quietly and tries again on a later rebuild.
+    /// Asks Steam's store about installed games the list doesn't know (View > Look Up Unknown Games on Steam):
+    /// one request every 1.5 s, at most 20 games a launch, each result saved and shown as it lands. When Steam
+    /// can't be reached it stops and doesn't try again until the next launch.
     private func lookUpUnknownGames() {
         let today = String(ISO8601DateFormatter().string(from: Date()).prefix(10))
         let wanted = Library.lookups(library, learned: learned, today: today)
-        guard !lookingUp, !wanted.isEmpty else { return }
+        guard lookUpUnknown, !lookingUp, !lookupStopped, !wanted.isEmpty else { return }
         lookingUp = true
+        var record = learned
         Task {
-            for game in wanted {
-                do {
-                    if let entry = try await SteamLookup.learn(name: game.name, appID: game.appID, today: today) {
-                        learned.entries.append(entry)
-                    } else {
-                        learned.misses[GameName.normalized(game.name)] = today
-                    }
-                } catch {
-                    break
-                }
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-            }
-            try? learned.save()
+            let outcome = await record.lookUp(wanted, today: today,
+                                              pause: { try? await Task.sleep(nanoseconds: UInt64(LearnedGames.steamSpacing * 1e9)) },
+                                              progress: { latest in Task { @MainActor in self.applyLearned(latest) } })
+            if outcome == .stopped { lookupStopped = true }
             lookingUp = false
-            rebuildLibrary()
         }
     }
 
-    /// Cached covers at once; the rest downloaded four at a time.
+    private func applyLearned(_ latest: LearnedGames) {
+        learned = latest
+        try? latest.save()
+        rebuildLibrary()
+    }
+
+    /// Covers read (or downloaded, four at a time) and their tints worked out off the main thread; each is shown
+    /// as it lands.
     private func loadArt() {
-        let wanted = Set(library.compactMap(\.steamAppID)).subtracting(artRequested)
+        let wanted = Set(library.compactMap(\.steamAppID)).subtracting(artRequested).sorted()
         artRequested.formUnion(wanted)
-        var missing: [Int] = []
-        for id in wanted.sorted() {
-            if let file = GameArt.cached(id), let image = NSImage(contentsOf: file) { setArt(id, image) } else { missing.append(id) }
-        }
-        guard !missing.isEmpty else { return }
-        Task {
-            for start in stride(from: 0, to: missing.count, by: 4) {
-                let chunk = missing[start..<min(start + 4, missing.count)]
-                let landed = await withTaskGroup(of: (Int, URL?).self) { group -> [(Int, URL)] in
-                    for id in chunk { group.addTask { (id, await GameArt.fetch(id)) } }
-                    var out: [(Int, URL)] = []
-                    for await (id, url) in group { if let url { out.append((id, url)) } }
+        guard !wanted.isEmpty else { return }
+        Task.detached {
+            for start in stride(from: 0, to: wanted.count, by: 4) {
+                let chunk = wanted[start..<min(start + 4, wanted.count)]
+                let landed = await withTaskGroup(of: (Int, Data?).self) { group -> [(Int, Data)] in
+                    for id in chunk {
+                        group.addTask { (id, await GameArt.fetch(id).flatMap { try? Data(contentsOf: $0) }) }
+                    }
+                    var out: [(Int, Data)] = []
+                    for await (id, data) in group { if let data { out.append((id, data)) } }
                     return out
                 }
-                for (id, url) in landed { if let image = NSImage(contentsOf: url) { setArt(id, image) } }
+                let tinted = landed.map { ($0.0, $0.1, CoverTint.average($0.1)) }
+                await MainActor.run {
+                    for (id, data, tint) in tinted {
+                        guard let image = NSImage(data: data) else { continue }
+                        if let tint { self.tint[id] = NSColor(red: tint.red, green: tint.green, blue: tint.blue, alpha: 1) }
+                        self.art[id] = image
+                    }
+                }
             }
         }
-    }
-
-    private func setArt(_ id: Int, _ image: NSImage) {
-        tint[id] = image.averageColor
-        art[id] = image
     }
 
     func playGame(_ game: LibraryGame) {
+        guard runtimeReady else { return }   // also covers double-click while the first download runs
         work(nil, "Starting \(game.name)", { try Launcher.run(game.launch, in: game.bottle) }, then: { self.rebuildLibrary() })
     }
 
@@ -216,7 +220,13 @@ final class Store: ObservableObject {
         do { try LibraryState(hidden: hidden.sorted()).save() } catch { alert = error.localizedDescription }
     }
 
-    /// Settings on a tile: the game's bottle page.
+    /// View > Library or Bottles, and the Library button on the bottle pages: remembered for next launch.
+    func setView(bottles: Bool) {
+        showBottles = bottles
+        UserDefaults.standard.set(bottles, forKey: "showBottles")
+    }
+
+    /// Settings on a tile: the game's bottle page, this time only.
     func openSettings(_ game: LibraryGame) {
         selection = game.bottle.id
         showBottles = true

@@ -19,9 +19,10 @@ struct StepoverApp: App {
         }
         .commands {
             CommandGroup(before: .toolbar) {
-                Button("Library") { store.showBottles = false }.keyboardShortcut("1")
-                Button("Bottles") { store.showBottles = true }.keyboardShortcut("2")
+                Button("Library") { store.setView(bottles: false) }.keyboardShortcut("1")
+                Button("Bottles") { store.setView(bottles: true) }.keyboardShortcut("2")
                 Toggle("Show Hidden Games", isOn: Binding(get: { store.showHidden }, set: { store.showHidden = $0 }))
+                Toggle("Look Up Unknown Games on Steam", isOn: Binding(get: { store.lookUpUnknown }, set: { store.lookUpUnknown = $0 }))
                 Divider()
             }
             CommandGroup(after: .newItem) {
@@ -103,6 +104,8 @@ struct BottlesView: View {
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 230)
             .toolbar {
+                Button { store.setView(bottles: false) } label: { Label("Library", systemImage: "square.grid.2x2") }
+                    .help("Back to your games")
                 Menu {
                     Button("New Bottle…") { showCreate = true }
                     if store.hasCrossOver { Button("Import from CrossOver…") { showImport = true } }

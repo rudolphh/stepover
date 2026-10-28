@@ -133,14 +133,17 @@ game's folder is folded into that game's tile. Each tile is matched to the games
 id, else the exe name, else the program's or bottle's name) and ordered by the last time it was played.
 
 The selected game (else the last played) fills the top: its cover, blurred and tinted by the cover's own
-average color, the verdict and controller answers, Play, and the reasons with their sources. An installed game the list doesn't
-know is looked up once on Steam's store (`SteamLookup`: its name, or its app id for a Steam game; exact single
-matches only) and remembered in `<STEPOVER_HOME>/learned-games.json`, misses for 30 days. Covers come
-from Steam's CDN by app id and are cached in `<STEPOVER_HOME>/Art` (a game Steam has no cover for is
-remembered with `<id>.none`; being offline isn't); games without one get a cover made from their icon and
+average color, the verdict and controller answers, Play, and the reasons with their sources. Each program in your bottles (or
+installed Steam game) the list doesn't know is looked up once on Steam's store (`SteamLookup`: only its name,
+or its app id for a Steam game; exact single matches only; at most 20 a launch, one request every 1.5 s;
+offline or refused stops until the next launch) and remembered in `<STEPOVER_HOME>/learned-games.json`, misses
+for 30 days. View > Look Up Unknown Games on Steam turns this off. Covers come
+from Steam's CDN by app id and are cached in `<STEPOVER_HOME>/Art` (a game Steam has no cover for, a 404, is
+remembered with `<id>.none` for 30 days; being offline, a server error or a captive portal's page isn't); games without one get a cover made from their icon and
 name. Hidden games are listed in `<STEPOVER_HOME>/library.json` (View > Show Hidden Games). On a first
-launch the runtime download starts by itself, Play waits for it, and a failed download offers Retry in the
-toolbar. `app/Tests/ui/library-check.sh <games.json>` checks the screen through the accessibility tree.
+launch the runtime download starts by itself, Play (and New Bottle, on an empty Library) waits for it, and a
+failed download offers Retry beside Your games. A tile's Settings opens its bottle page without changing
+what the app opens on; View > Library or Bottles (or the Library button) does. `app/Tests/ui/library-check.sh <games.json>` checks the screen through the accessibility tree.
 
 ## Games list
 

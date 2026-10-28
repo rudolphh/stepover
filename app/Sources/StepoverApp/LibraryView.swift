@@ -1,5 +1,4 @@
 import AppKit
-import CoreImage
 import StepoverKit
 import SwiftUI
 
@@ -24,8 +23,15 @@ struct LibraryView: View {
                 } description: {
                     Text("Install a Windows game, or bring your games over from CrossOver.")
                 } actions: {
-                    Button("New Bottle…") { showCreate = true }.buttonStyle(.borderedProminent)
-                    if store.hasCrossOver { Button("Import from CrossOver…") { showImport = true } }
+                    VStack(spacing: 12) {
+                        HStack {
+                            Button("New Bottle…") { showCreate = true }.buttonStyle(.borderedProminent)
+                            if store.hasCrossOver { Button("Import from CrossOver…") { showImport = true } }
+                        }
+                        .disabled(!store.runtimeReady)
+                        .help(store.runtimeReady ? "" : "Available once what games need has downloaded")
+                        RuntimeStatus()
+                    }
                 }
             } else {
                 VStack(spacing: 0) {
@@ -106,33 +112,30 @@ struct RuntimeStatus: View {
 }
 
 extension TileTone {
-    var color: Color {
-        switch self {
-        case .good: return .green
-        case .maybe: return .blue
-        case .caution: return .orange
-        case .bad: return .red
-        case .mac: return .purple
-        case .unknown: return .secondary
-        }
+    /// The tone's text color for this appearance (StepoverKit picks values that read at 4.5:1 on their pill).
+    func color(_ scheme: ColorScheme) -> Color {
+        let c = rgb(dark: scheme == .dark)
+        return Color(red: c.red, green: c.green, blue: c.blue)
     }
 }
 
 /// A verdict as a tinted capsule: the word always travels with its color.
 struct VerdictPill: View {
+    @Environment(\.colorScheme) private var scheme
     let text: String
     let tone: TileTone
     var large = false
 
     var body: some View {
+        let color = tone.color(scheme)
         HStack(spacing: large ? 7 : 5) {
-            Circle().fill(tone.color).frame(width: large ? 8 : 6, height: large ? 8 : 6)
+            Circle().fill(color).frame(width: large ? 8 : 6, height: large ? 8 : 6)
             Text(text).lineLimit(large ? 2 : 1)
         }
         .font(large ? .callout.weight(.semibold) : .caption.weight(.semibold))
-        .foregroundStyle(tone.color)
+        .foregroundStyle(color)
         .padding(.horizontal, large ? 11 : 8).padding(.vertical, large ? 6 : 3)
-        .background(tone.color.opacity(tone == .unknown ? 0.12 : 0.16), in: Capsule())
+        .background(color.opacity(tone.pillAlpha), in: Capsule())
     }
 }
 
@@ -267,7 +270,8 @@ struct PlayButton: View {
     private var waitReason: String? {
         if store.runtimeReady { return nil }
         if let progress = store.runtimeProgress { return "Getting ready to play (\(Int(progress * 100))%)" }
-        return "Couldn't get what games need yet; Retry is in the toolbar"
+        if store.runtimeFailed { return "Couldn't get what games need yet; press Retry" }
+        return "Getting ready to play"
     }
 }
 
@@ -303,7 +307,7 @@ struct HeroView: View {
                     }
                 }
                 HStack(spacing: 10) {
-                    PlayButton(game: game)
+                    PlayButton(game: game).keyboardShortcut(.defaultAction)   // Return plays the selected game
                     Button("Settings") { store.openSettings(game) }.controlSize(.large)
                 }
                 if !game.isSteamClient && !(verdict.extra.isEmpty && verdict.reasons.isEmpty) {
@@ -336,18 +340,5 @@ struct HeroView: View {
             .accessibilityHidden(true)
         }
         .environment(\.colorScheme, .dark)
-    }
-}
-
-extension NSImage {
-    /// The image's average color (CoreImage's area average), for the hero's tint.
-    var averageColor: NSColor? {
-        guard let tiff = tiffRepresentation, let input = CIImage(data: tiff) else { return nil }
-        let filter = CIFilter(name: "CIAreaAverage", parameters: [kCIInputImageKey: input, kCIInputExtentKey: CIVector(cgRect: input.extent)])
-        guard let output = filter?.outputImage else { return nil }
-        var pixel = [UInt8](repeating: 0, count: 4)
-        CIContext(options: [.workingColorSpace: NSNull()])
-            .render(output, toBitmap: &pixel, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1), format: .RGBA8, colorSpace: nil)
-        return NSColor(red: CGFloat(pixel[0]) / 255, green: CGFloat(pixel[1]) / 255, blue: CGFloat(pixel[2]) / 255, alpha: 1)
     }
 }

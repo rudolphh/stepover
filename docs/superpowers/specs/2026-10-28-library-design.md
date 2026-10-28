@@ -39,10 +39,12 @@ will and won't work before they spend money, time or disk, and make every defaul
   tell, and with one click when it can't.
 - **G6. Private and offline.** No account and no telemetry. Verdicts come from one cached list, and matching
   your games to it happens on the Mac. Stepover talks only to public pages: the list itself, Steam's image
-  server for cover art, and Steam's store pages: when you search for a game, and once for each installed game
-  the list doesn't know (only its name, or its Steam app id, is sent; only an exact single match is kept;
-  a miss is asked again after 30 days). The maintainer approved that lookup on 2026-10-28 so games like
-  Sainthood get their cover and answers. It works offline from what it has cached. (my call: art for every matched game is worth Valve's
+  server for cover art, and Steam's store pages: when you search for a game, and once for each program in
+  your bottles (or installed Steam game) that the list doesn't know. Only that program's name, or the Steam
+  game's app id, is sent; only an exact single match is kept; a miss is asked again after 30 days; at most 20
+  a launch, one request every 1.5 s. View > Look Up Unknown Games on Steam turns it off. The maintainer
+  approved that lookup on 2026-10-28 so games like Sainthood get their cover and answers. It works offline
+  from what it has cached. (my call: art for every matched game is worth Valve's
   image server seeing which covers are fetched; it's the same server Steam itself uses)
 
 ## Non-goals
@@ -144,8 +146,8 @@ installing")
 - The app fetches it at launch when its copy is over a day old, and keeps the cached copy on any failure
   (the same rules as `RuntimeIndex.fetch`). `STEPOVER_GAMES_LIST` (a URL or a file) overrides the location.
 - **Search for a game not in the list** looks that one game up from the Mac: Steam store search,
-  `appdetails`, the Deck report (and ProtonDB if allowed). The same lookup runs for an installed Steam game
-  the list doesn't have, at most once a week per game. (my call)
+  `appdetails`, the Deck report (and ProtonDB if allowed). The same lookup runs once for each installed game
+  the list doesn't have (G6). (my call)
 - No API keys anywhere. Cover art comes from Steam's CDN by app ID (`library_600x900.jpg`), which needs none.
 
 ## The Library screen

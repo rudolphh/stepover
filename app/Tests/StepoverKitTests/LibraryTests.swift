@@ -82,6 +82,24 @@ final class LibraryTests: XCTestCase {
         XCTAssertNil(SteamLibrary.client(in: bottle("Empty")))
     }
 
+    // Review M10/M11/M12: the Steam program's own settings carry into -applaunch; without a client, a program in
+    // a Steam game's folder stays a tile; Steam's redistributables are not a game.
+    func testSteamLaunchKeepsTheClientsSettingsAndRedistributablesAreSkipped() {
+        let steam = bottle("Steam")
+        let client = Program(name: "Steam", exe: #"C:\Program Files (x86)\Steam\steam.exe"#, args: ["-silent"], env: ["X": "1"])
+        let redist = SteamApp(id: 228980, name: "Steamworks Common Redistributables", folder: steam.url, windowsFolder: #"C:\x\common\Steamworks Shared"#)
+        let rdr2 = SteamApp(id: 1174180, name: "Red Dead Redemption 2", folder: steam.url, windowsFolder: rdr2Folder)
+        let games = Library.games(bottles: [(steam, config([client]))], steamApps: { _ in [redist, rdr2] }, index: index, recent: [])
+        XCTAssertEqual(games.map(\.name), ["Red Dead Redemption 2", "Steam"])
+        XCTAssertEqual(games[0].launch.args, ["-silent", "-applaunch", "1174180"])
+        XCTAssertEqual(games[0].launch.env, ["X": "1"])
+
+        let odd = bottle("Odd Steam")   // Steam somewhere Stepover can't find: the launcher stays
+        let launcher = Program(name: "RDR2 launcher", exe: rdr2Folder + #"\RDR2.exe"#)
+        let kept = Library.games(bottles: [(odd, config([launcher]))], steamApps: { _ in [rdr2] }, index: index, recent: [])
+        XCTAssertEqual(kept.map(\.name), ["RDR2 launcher"])
+    }
+
     func testShortCopyAndTone() {
         XCTAssertEqual(PlayVerdict.Kind.antiCheatBlocked.short, "Won't run: anti-cheat")
         XCTAssertEqual(PlayVerdict.Kind.notTested.short, "Not tested yet")
@@ -90,6 +108,18 @@ final class LibraryTests: XCTestCase {
         XCTAssertEqual(PlayVerdict.Kind.doesntRun.tone, .bad)
         XCTAssertEqual(ControllerVerdict.worksMenusMouse.short, "Controller, mouse for menus")
         XCTAssertEqual(ControllerVerdict.full.short, "Full controller")
+    }
+
+    // Review I5: every tone's text reads at 4.5:1 on its own pill, in light and dark windows.
+    func testToneContrast() {
+        let light = TileTone.windowBackground(dark: false), dark = TileTone.windowBackground(dark: true)
+        for tone in [TileTone.good, .maybe, .caution, .bad, .mac, .unknown] {
+            for (isDark, window) in [(false, light), (true, dark)] {
+                let text = tone.rgb(dark: isDark)
+                let pill = TileTone.blend(text, over: window, alpha: tone.pillAlpha)
+                XCTAssertGreaterThanOrEqual(TileTone.contrast(text, pill), 4.5, "\(tone) \(isDark ? "dark" : "light")")
+            }
+        }
     }
 
     func testHiddenGamesSurviveASave() throws {

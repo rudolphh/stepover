@@ -14,17 +14,25 @@ APP="$SCRATCH/Stepover Test.app"
 AX="$SCRATCH/axdump"
 failed=0
 check() { if eval "$2"; then echo "PASS $1"; else echo "FAIL $1"; failed=1; fi }
-quit_test() { pkill -f "Stepover Test.app/Contents/MacOS/Stepover"; sleep 1; }
-launch() { # launch <home> [env...]: starts the test copy on <home>; sets $pid
+quit_test() { # waits until the test copy is gone, so the next launch is a fresh process
+    pkill -f "Stepover Test.app/Contents/MacOS/Stepover"
+    for i in {1..20}; do pgrep -qf "Stepover Test.app/Contents/MacOS/Stepover" || break; sleep 0.5; done
+}
+launch() { # launch <home> [env...]: starts the test copy on <home>, waits for its window; sets $pid
     local home=$1; shift
     quit_test
     open -n --env STEPOVER_HOME="$home" --env STEPOVER_GAMES_LIST="$GAMES" "$@" "$APP"
-    sleep 5
-    pid=$(pgrep -f "Stepover Test.app/Contents/MacOS/Stepover" | head -1)
+    for i in {1..30}; do
+        pid=$(pgrep -f "Stepover Test.app/Contents/MacOS/Stepover" | head -1)
+        [ -n "$pid" ] && "$AX" "$pid" 2>/dev/null | grep -q "== window" && break
+        sleep 0.5
+    done
+    sleep 2   # the first frame's content
 }
 trap 'quit_test; rm -rf "$SCRATCH"' EXIT
 
 swiftc -O "$ROOT/app/Tests/ui/axdump.swift" -o "$AX" || exit 1
+defaults delete io.github.rudolphh.stepover.test 2>/dev/null   # the test copy's own remembered view
 STEPOVER_APP="$APP" STEPOVER_BIN=none STEPOVER_BUNDLE_ID=io.github.rudolphh.stepover.test \
     zsh "$ROOT/app/build-app.sh" >/dev/null || { echo "FAIL build"; exit 1; }
 
@@ -40,7 +48,8 @@ dump=$("$AX" "$pid")
 check "the window is the Library (no Bottles sidebar)" '! print -r -- "$dump" | grep -q "AXHeading: Bottles"'
 for n in $names; do check "tile: $n" 'print -r -- "$dump" | grep -q "AXButton: $n"'; done
 check "Red Dead Redemption 2 plays (tested on Mac)" 'print -r -- "$dump" | grep -E "AXButton: Red Dead Redemption 2" | grep -qE "Plays great|Runs on this Mac"'
-sleep 6   # installed games the list doesn't know are looked up on Steam's store in the background
+# installed games the list doesn't know are looked up on Steam's store in the background, one request every 1.5 s
+for i in {1..20}; do grep -q '"Sainthood"' "$home/learned-games.json" 2>/dev/null && break; sleep 1; done
 check "Sainthood was looked up on Steam (exact name)" '/usr/bin/python3 -I -c "import json,sys;sys.exit(0 if any(e[\"name\"]==\"Sainthood\" for e in json.load(open(sys.argv[1]))[\"entries\"]) else 1)" "$home/learned-games.json"'
 dump=$("$AX" "$pid")
 check "Sainthood gets an answer from Steam" 'print -r -- "$dump" | grep -E "AXButton: Sainthood" | grep -qE "Should play|Not tested yet|Probably"'
@@ -57,6 +66,12 @@ fi
 "$AX" "$pid" - "Bottles" >/dev/null; sleep 1
 check "View > Bottles shows the bottle pages" '"$AX" "$pid" | grep -q "AXHeading: Bottles"'
 "$AX" "$pid" - "Library" >/dev/null; sleep 1
+"$AX" "$pid" - "Settings" >/dev/null; sleep 1
+dump=$("$AX" "$pid")
+check "Settings opens the game's bottle page" 'print -r -- "$dump" | grep -q "AXHeading: Bottles"'
+check "the bottle pages have a way back to the Library" 'print -r -- "$dump" | grep -q "AXButton: Library"'
+launch "$home"
+check "Settings doesn't change what the app opens on" '! "$AX" "$pid" | grep -q "AXHeading: Bottles"'
 
 # Home B: your bottles, no runtime, a runtime list whose download can't be reached
 home=$SCRATCH/home-b
@@ -73,4 +88,15 @@ check "no runtime: the toolbar says the download failed" 'print -r -- "$dump" | 
 check "no runtime: Retry" 'print -r -- "$dump" | grep -q "AXButton: Retry"'
 "$AX" "$pid" - "Sainthood" >/dev/null; sleep 1
 check "no runtime: Play waits" '"$AX" "$pid" | grep -q "AXButton: Play.*(disabled)"'
+
+# Home C: a first launch: no bottles, no runtime, a download that can't be reached
+home=$SCRATCH/home-c
+mkdir -p "$home"
+launch "$home" --env STEPOVER_RUNTIME_INDEX="$SCRATCH/index.json"
+sleep 3
+dump=$("$AX" "$pid")
+check "first launch: an empty Library" 'print -r -- "$dump" | grep -q "No games yet"'
+check "first launch: the failed download is shown" 'print -r -- "$dump" | grep -q "Couldn.t get what games need"'
+check "first launch: Retry" 'print -r -- "$dump" | grep -q "AXButton: Retry"'
+check "first launch: nothing that needs the runtime can start" 'print -r -- "$dump" | grep -qE "AXButton: New Bottle.*\(disabled\)"'
 exit $failed

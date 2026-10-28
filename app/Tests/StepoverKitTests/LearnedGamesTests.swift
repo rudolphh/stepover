@@ -75,6 +75,28 @@ final class LearnedGamesTests: XCTestCase {
         XCTAssertEqual(Library.lookups(after, learned: learned, today: "2026-12-01").map(\.name), ["Homebrew Thing"])
     }
 
+    // Review C1/I8: one request per pause, a cap per launch, progress after each game, a stop at the first failure.
+    func testLookUpPacesCapsAndStops() async {
+        let answers = ["storesearch": search, "appdetails": details, "deckappcompat": deck]
+        let pauses = Counter()
+        var learned = LearnedGames(), saved = 0
+        let wanted: [(name: String, appID: Int?)] = [("Sainthood", nil), ("Sainthood", 1748600), ("Third", nil)]
+        let outcome = await learned.lookUp(wanted, today: "2026-10-28", limit: 2, fetch: steam(answers),
+                                           pause: { await pauses.add() }, progress: { _ in saved += 1 })
+        XCTAssertEqual(outcome, .finished)
+        XCTAssertEqual(learned.entries.count, 2)               // the cap: "Third" waits for next launch
+        XCTAssertEqual(saved, 2)
+        let paused = await pauses.value
+        XCTAssertEqual(paused, 5)                              // 3 requests by name + 2 by app id
+
+        var offline = LearnedGames()
+        let stopped = await offline.lookUp(wanted, today: "2026-10-28", fetch: steam([:]), pause: {}, progress: { _ in saved += 100 })
+        XCTAssertEqual(stopped, .stopped)
+        XCTAssertTrue(offline.entries.isEmpty)
+        XCTAssertTrue(offline.misses.isEmpty)                  // being offline isn't a miss
+        XCTAssertEqual(saved, 2)
+    }
+
     func testLearnedGamesSurviveASave() throws {
         let file = dir.appendingPathComponent("learned-games.json")
         XCTAssertTrue(LearnedGames.load(from: file).entries.isEmpty)
@@ -82,4 +104,9 @@ final class LearnedGamesTests: XCTestCase {
         XCTAssertEqual(LearnedGames.load(from: file).entries.first?.steam, 1)
         XCTAssertEqual(LearnedGames.load(from: file).misses, ["b": "2026-10-28"])
     }
+}
+
+actor Counter {
+    var value = 0
+    func add() { value += 1 }
 }
