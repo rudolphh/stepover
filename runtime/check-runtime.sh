@@ -91,8 +91,11 @@ if [ "$METAL" = 1 ]; then
             >"$TMP/run-$api.log" 2>&1 || true
         grep -q "^stepover-compat: $api.exe: backend d3dmetal" "$TMP/run-$api.log" ||
             fail metal "$api.exe didn't run on D3DMetal: $(grep "^stepover-compat: $api.exe" "$TMP/run-$api.log" | tail -1)"
-        grep -q "^$api: ok" "$TMP/run-$api.log" ||
-            fail metal "$(grep "^$api:" "$TMP/run-$api.log" | tail -1 || true) (or it crashed or took over $TIMEOUT s)"
+        if ! grep -q "^$api: ok" "$TMP/run-$api.log"; then
+            reason="$(grep "^$api:" "$TMP/run-$api.log" | tail -1 || true)"   # the program's own error line
+            [ -n "$reason" ] || reason="$api.exe printed nothing (it crashed, or was still running after $TIMEOUT s); last output: $(tail -n 3 "$TMP/run-$api.log" | tr '\n' ' ' | sed 's/ $//')"
+            fail metal "$reason"
+        fi
     done
     echo "ok metal"
 fi
