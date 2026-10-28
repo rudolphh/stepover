@@ -29,12 +29,14 @@ public struct GameEntry: Codable, Hashable, Sendable {
     public var store: StoreFacts?         // Steam store facts
     public var deck: DeckFacts?
     public var fix: Bool                  // Stepover's fix list has a fix for it
+    public var steamSearched: String?     // when the builder last searched Steam for this name and found no exact match
 
     public init(id: String, name: String, names: [String] = [], steam: Int? = nil, epic: String? = nil, exes: [String] = [],
                 agwPage: String? = nil, mac: MacTests? = nil, antiCheat: AntiCheat? = nil, store: StoreFacts? = nil,
-                deck: DeckFacts? = nil, fix: Bool = false) {
+                deck: DeckFacts? = nil, fix: Bool = false, steamSearched: String? = nil) {
         self.id = id; self.name = name; self.names = names; self.steam = steam; self.epic = epic; self.exes = exes
         self.agwPage = agwPage; self.mac = mac; self.antiCheat = antiCheat; self.store = store; self.deck = deck; self.fix = fix
+        self.steamSearched = steamSearched
     }
 }
 

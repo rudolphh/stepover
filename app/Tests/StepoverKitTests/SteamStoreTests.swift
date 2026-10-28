@@ -54,6 +54,16 @@ final class SteamStoreTests: XCTestCase {
         XCTAssertNil(SteamStore.storeFacts(appdetails: rdr2, appID: 99, checked: "2026-10-28"))   // another game's answer
     }
 
+    func testSearchResults() {
+        XCTAssertEqual(SteamStore.searchURL("hollow knight").absoluteString,
+                       "https://store.steampowered.com/api/storesearch/?term=hollow%20knight&cc=us&l=en")
+        let body = Data(#"{"total":2,"items":[{"type":"app","name":"Hollow Knight","id":367520},{"type":"app","name":"Hollow Knight: Silksong","id":1030300}]}"#.utf8)
+        XCTAssertEqual(SteamStore.searchResults(body)?.map(\.id), [367520, 1030300])
+        XCTAssertEqual(SteamStore.searchResults(body)?.first?.name, "Hollow Knight")
+        XCTAssertEqual(SteamStore.searchResults(Data(#"{"total":0,"items":[]}"#.utf8))?.count, 0)
+        XCTAssertNil(SteamStore.searchResults(Data("<html>".utf8)))
+    }
+
     func testDeckFacts() {
         XCTAssertEqual(SteamStore.deckFacts(report: rdr2Deck, checked: "2026-10-28"),
                        DeckFacts(category: .playable, controllerWorks: true, checked: "2026-10-28"))

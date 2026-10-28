@@ -16,6 +16,22 @@ public enum SteamStore {
         URL(string: "https://store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport?nAppID=\(appID)&l=english")!
     }
 
+    public static func searchURL(_ term: String) -> URL {
+        var parts = URLComponents(string: "https://store.steampowered.com/api/storesearch/")!
+        parts.queryItems = [URLQueryItem(name: "term", value: term), URLQueryItem(name: "cc", value: "us"), URLQueryItem(name: "l", value: "en")]
+        return parts.url!
+    }
+
+    /// The games a store search found, in Steam's order; nil when the body isn't a search answer.
+    public static func searchResults(_ data: Data) -> [(id: Int, name: String)]? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let items = root["items"] as? [[String: Any]] else { return nil }
+        return items.compactMap { item in
+            guard let id = item["id"] as? Int, let name = item["name"] as? String else { return nil }
+            return (id, name)
+        }
+    }
+
     /// Nil when Steam has no data for the game ("success": false) or the body isn't its appdetails.
     public static func storeFacts(appdetails: Data, appID: Int, checked: String) -> (name: String, facts: StoreFacts)? {
         guard let root = try? JSONSerialization.jsonObject(with: appdetails) as? [String: Any],
