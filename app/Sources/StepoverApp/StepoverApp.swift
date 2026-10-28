@@ -9,7 +9,7 @@ struct StepoverApp: App {
 
     var body: some Scene {
         WindowGroup("Stepover") {
-            ContentView()
+            RootView()
                 .environmentObject(store)
                 .onAppear { appDelegate.store = store }
                 .frame(minWidth: 880, minHeight: 560)
@@ -18,6 +18,12 @@ struct StepoverApp: App {
                 } message: { Text(store.alert ?? "") }
         }
         .commands {
+            CommandGroup(before: .toolbar) {
+                Button("Library") { store.showBottles = false }.keyboardShortcut("1")
+                Button("Bottles") { store.showBottles = true }.keyboardShortcut("2")
+                Toggle("Show Hidden Games", isOn: Binding(get: { store.showHidden }, set: { store.showHidden = $0 }))
+                Divider()
+            }
             CommandGroup(after: .newItem) {
                 Button("Reload Bottles") { store.reload(); store.refreshIndex() }.keyboardShortcut("r")
                 Button("Wine Runtimes…") { store.refreshIndex(); store.showRuntimes = true }
@@ -31,6 +37,10 @@ struct StepoverApp: App {
             }
             CommandGroup(replacing: .help) {
                 Button("Licenses and Notices") { store.openLicenses() }
+                Button("Games List Credits") {
+                    store.alert = store.gamesCredits.isEmpty ? "No games list yet."
+                        : (["What Stepover knows about games comes from:"] + store.gamesCredits).joined(separator: "\n")
+                }
                 Button("Stepover Source Code") { store.openSource() }
                 if let link = Bundle.main.object(forInfoDictionaryKey: "StepoverSponsorURL") as? String,
                    let url = URL(string: link) {
@@ -41,7 +51,20 @@ struct StepoverApp: App {
     }
 }
 
-struct ContentView: View {
+/// The Library, or today's bottle pages (View > Bottles).
+struct RootView: View {
+    @EnvironmentObject var store: Store
+
+    var body: some View {
+        Group {
+            if store.showBottles { BottlesView() } else { LibraryView() }
+        }
+        .sheet(isPresented: $store.showFixSources) { FixSourcesSheet() }
+        .sheet(isPresented: $store.showRuntimes) { RuntimesView() }
+    }
+}
+
+struct BottlesView: View {
     @EnvironmentObject var store: Store
     @State private var showImport = false
     @State private var showCreate = false
@@ -104,8 +127,6 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showImport) { ImportSheet() }
         .sheet(isPresented: $showCreate) { CreateSheet() }
-        .sheet(isPresented: $store.showFixSources) { FixSourcesSheet() }
-        .sheet(isPresented: $store.showRuntimes) { RuntimesView() }
     }
 }
 

@@ -64,8 +64,7 @@ final class Store: ObservableObject {
             }
         }
         watchControllers()
-        // a first launch starts the one download games need by itself (spec: Wine runtime, in plain words)
-        if !runtimeReady && manifest != nil { installRuntime() }
+        startFirstDownload()
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refreshRunning() }
         }
@@ -108,7 +107,17 @@ final class Store: ObservableObject {
 
     /// Fetches the runtime list from GitHub (at launch, on Reload and when Wine Runtimes opens); offline keeps the cache.
     func refreshIndex() {
-        Task { if await RuntimeIndex.fetch() { index = RuntimeIndex.load() } }
+        Task {
+            if await RuntimeIndex.fetch() {
+                index = RuntimeIndex.load()
+                startFirstDownload()   // the list can arrive after launch with the runtime to get
+            }
+        }
+    }
+
+    /// A first launch starts the one download games need by itself (spec: Wine runtime, in plain words).
+    private func startFirstDownload() {
+        if !runtimeReady && runtimeProgress == nil && !runtimeFailed && manifest != nil { installRuntime() }
     }
 
     /// The runtime a first install downloads: one this app can use.
