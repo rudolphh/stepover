@@ -69,6 +69,16 @@ public enum SteamLibrary {
         return apps
     }
 
+    /// The Steam client installed in the bottle, as a program named "Steam" (its exe as Steam itself sees it).
+    public static func client(in bottle: Bottle) -> Program? {
+        let candidates = [("Program Files (x86)/Steam", #"C:\Program Files (x86)\Steam"#), ("Program Files/Steam", #"C:\Program Files\Steam"#)]
+        for (relative, windows) in candidates
+        where FileManager.default.fileExists(atPath: bottle.cDrive.appendingPathComponent(relative).appendingPathComponent("steam.exe").path) {
+            return Program(name: "Steam", exe: windows + #"\steam.exe"#)
+        }
+        return nil
+    }
+
     /// Steam's own folder in the bottle plus the extra libraries in its libraryfolders.vdf.
     /// Each library as a Mac folder and as the Windows path Steam itself uses for it (games run
     /// under that path, so fixes are keyed by it rather than by a symlink-resolved one).
