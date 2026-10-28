@@ -123,6 +123,23 @@ on it, with a button to switch.
 `stepover-compat.conf` starts with `version = 3`; a runtime's `VERSION` records the format its plug-in
 reads (`compat_format`), so the Fixes section can say when a bottle's runtime can't apply a fix.
 
+## Library
+
+The window opens on the Library (`LibraryView`); **View > Bottles** shows the bottle pages instead and is
+remembered. Its tiles (`Library.games` in StepoverKit) are every program in each bottle's `stepover.json`,
+every installed Steam game (`SteamLibrary.apps`; Play runs `steam.exe -applaunch <id>`, so it records in
+the recent list under the game's name), and one Steam tile per bottle with Steam; a program inside a Steam
+game's folder is folded into that game's tile. Each tile is matched to the games list on the Mac (Steam app
+id, else the exe name, else the program's or bottle's name) and ordered by the last time it was played.
+
+The selected game (else the last played) fills the top: its cover, blurred and tinted by the cover's own
+average color, the verdict and controller answers, Play, and the reasons with their sources. Covers come
+from Steam's CDN by app id and are cached in `<STEPOVER_HOME>/Art` (a game Steam has no cover for is
+remembered with `<id>.none`; being offline isn't); games without one get a cover made from their icon and
+name. Hidden games are listed in `<STEPOVER_HOME>/library.json` (View > Show Hidden Games). On a first
+launch the runtime download starts by itself, Play waits for it, and a failed download offers Retry in the
+toolbar. `app/Tests/ui/library-check.sh <games.json>` checks the screen through the accessibility tree.
+
 ## Games list
 
 What Stepover knows about a game before anyone plays it here comes from one file, `games.json`, built

@@ -37,6 +37,9 @@ struct LibraryView: View {
                             HStack(alignment: .firstTextBaseline, spacing: 10) {
                                 Text("Your games").font(.title3.weight(.semibold))
                                 Text("Last played first").font(.callout).foregroundStyle(.secondary)
+                                Spacer(minLength: 16)
+                                RuntimeStatus()
+                                ControllerStatus()
                             }
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 140, maximum: 168), spacing: 22, alignment: .top)],
                                       alignment: .leading, spacing: 26) {
@@ -50,22 +53,34 @@ struct LibraryView: View {
                 }
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) { RuntimeStatus() }
-            ToolbarItem(placement: .primaryAction) {
-                Label(store.controllerName.map { "\($0) connected" } ?? "No controller", systemImage: "gamecontroller")
-                    .labelStyle(.titleAndIcon)
-                    .foregroundStyle(store.controllerName == nil ? .secondary : .primary)
-                    .help(store.controllerName == nil ? "Connect a controller to see it here" : "Stepover sees this controller")
-            }
-        }
         .navigationTitle("Library")
         .sheet(isPresented: $showImport) { ImportSheet() }
         .sheet(isPresented: $showCreate) { CreateSheet() }
     }
 }
 
-/// The toolbar's one line about what games need to run, in plain words.
+/// Which controller Stepover sees: plain status text, not a control.
+struct ControllerStatus: View {
+    @EnvironmentObject var store: Store
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: store.controllerName == nil ? "gamecontroller" : "gamecontroller.fill")
+            if let name = store.controllerName {
+                Circle().fill(.green).frame(width: 6, height: 6)
+                Text("\(name) connected")
+            } else {
+                Text("No controller")
+            }
+        }
+        .font(.callout)
+        .foregroundStyle(store.controllerName == nil ? .secondary : .primary)
+        .fixedSize()
+        .help(store.controllerName == nil ? "Connect a controller to see it here" : "Stepover sees this controller")
+    }
+}
+
+/// One line about what games need to run, in plain words (beside the controller status).
 struct RuntimeStatus: View {
     @EnvironmentObject var store: Store
 

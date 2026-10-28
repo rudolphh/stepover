@@ -2,7 +2,8 @@
 
 Run Windows games on Apple Silicon Macs. Stepover uses the same Wine as CrossOver, built unmodified
 from the source CodeWeavers publishes, together with Apple's D3DMetal (DirectX 11/12 to Metal, with
-MetalFX upscaling), DXMT and DXVK, and a Mac app for bottles, installers and per-game settings.
+MetalFX upscaling), DXMT and DXVK, and a Mac app that opens on your games: cover art, Play, and
+before you play, whether each game runs on a Mac and works with a controller, and why.
 
 Free and open source. Not made, endorsed or supported by CodeWeavers or Apple.
 
@@ -27,6 +28,12 @@ picks its Wine version.
 (`softwareupdate --install-rosetta`), and Homebrew's `winetricks` (installed with the cask).
 
 ## Use
+
+The app opens on the **Library**: every game in your bottles and every game you installed through
+Steam, last played first. Each one says whether it plays on a Mac (from AppleGamingWiki's Mac tests,
+anti-cheat data, Steam and the Steam Deck results) and whether it works with a controller; select one
+to see why, with sources. Right-click a game to hide it; **View > Bottles** (⌘2) shows the bottle
+pages below, and **View > Library** (⌘1) comes back.
 
 1. **New Bottle.** A bottle is a Windows folder for one or more games.
 2. **Install Windows Program.** Pick the game's installer (`setup.exe` or `.msi`). When it
