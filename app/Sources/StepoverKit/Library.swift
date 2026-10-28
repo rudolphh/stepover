@@ -19,7 +19,7 @@ public struct LibraryGame: Identifiable, Hashable, Sendable {
 /// Which games the Library shows (spec: Games appear by themselves), matched to the games list on the Mac.
 public enum Library {
     public static func games(bottles: [(bottle: Bottle, config: BottleConfig)], steamApps: (Bottle) -> [SteamApp],
-                             index: GameIndex, recent: [RecentGames.Entry]) -> [LibraryGame] {
+                             index: GameIndex, recent: [RecentGames.Entry], learned: GameIndex? = nil) -> [LibraryGame] {
         func played(_ bottle: Bottle, _ name: String) -> Date? {
             recent.filter { $0.bottle == bottle.name && $0.program == name }.map(\.played).max()
         }
@@ -32,13 +32,14 @@ public enum Library {
                 let exe = program.exe.lowercased()
                 if apps.contains(where: { exe.hasPrefix($0.windowsFolder.lowercased() + "\\") }) { continue }
                 let entry = index.match(name: program.name, exe: fileName(program.exe)) ?? index.match(name: bottle.name, exe: nil)
+                    ?? learned?.match(name: program.name, exe: nil)
                 out.append(LibraryGame(id: "\(bottle.id)|\(program.name)", name: program.name, bottle: bottle, kind: .program(program),
                                        entry: entry, lastPlayed: played(bottle, program.name), steamAppID: entry?.steam, launch: program))
             }
             if let client {
                 for app in apps {
                     let launch = Program(name: app.name, exe: client.exe, args: ["-applaunch", String(app.id)])
-                    let entry = index.entry(steam: app.id) ?? index.match(name: app.name, exe: nil)
+                    let entry = index.entry(steam: app.id) ?? index.match(name: app.name, exe: nil) ?? learned?.entry(steam: app.id)
                     out.append(LibraryGame(id: "\(bottle.id)|steam:\(app.id)", name: app.name, bottle: bottle, kind: .steamGame(app),
                                            entry: entry, lastPlayed: played(bottle, app.name), steamAppID: app.id, launch: launch))
                 }
@@ -56,6 +57,20 @@ public enum Library {
             default: return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
             }
         }
+    }
+
+    /// Games the list doesn't know and this Mac hasn't looked up on Steam yet (or whose miss is over 30 days
+    /// old), by name; a Steam game also carries its app id.
+    public static func lookups(_ games: [LibraryGame], learned: LearnedGames, today: String) -> [(name: String, appID: Int?)] {
+        var seen = Set<String>()
+        return games.compactMap { game -> (name: String, appID: Int?)? in
+            guard game.entry == nil, !game.isSteamClient else { return nil }
+            let key = GameName.normalized(game.name)
+            if let missed = learned.misses[key], LearnedGames.days(from: missed, to: today) <= 30 { return nil }
+            guard seen.insert(key).inserted else { return nil }
+            if case .steamGame(let app) = game.kind { return (game.name, app.id) }
+            return (game.name, nil)
+        }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     static func fileName(_ windowsPath: String) -> String {

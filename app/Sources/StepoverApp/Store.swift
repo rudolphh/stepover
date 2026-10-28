@@ -47,6 +47,9 @@ final class Store: ObservableObject {
     private var gamesList: GamesList
     private var gameIndex: GameIndex
     private var artRequested: Set<Int> = []
+    /// Installed games the list doesn't know, looked up once on Steam's store from this Mac (LearnedGames).
+    private var learned = LearnedGames.load()
+    private var lookingUp = false
     var gamesCredits: [String] { gamesList.credits }
 
     init() {
@@ -144,8 +147,36 @@ final class Store: ObservableObject {
 
     func rebuildLibrary() {
         library = Library.games(bottles: bottles.map { (bottle: $0, config: config($0)) },
-                                steamApps: { SteamLibrary.apps(in: $0) }, index: gameIndex, recent: RecentGames.load())
+                                steamApps: { SteamLibrary.apps(in: $0) }, index: gameIndex, recent: RecentGames.load(),
+                                learned: learned.index)
         loadArt()
+        lookUpUnknownGames()
+    }
+
+    /// Asks Steam's store about installed games the list doesn't know, one a second, exact matches only; offline
+    /// stops quietly and tries again on a later rebuild.
+    private func lookUpUnknownGames() {
+        let today = String(ISO8601DateFormatter().string(from: Date()).prefix(10))
+        let wanted = Library.lookups(library, learned: learned, today: today)
+        guard !lookingUp, !wanted.isEmpty else { return }
+        lookingUp = true
+        Task {
+            for game in wanted {
+                do {
+                    if let entry = try await SteamLookup.learn(name: game.name, appID: game.appID, today: today) {
+                        learned.entries.append(entry)
+                    } else {
+                        learned.misses[GameName.normalized(game.name)] = today
+                    }
+                } catch {
+                    break
+                }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            try? learned.save()
+            lookingUp = false
+            rebuildLibrary()
+        }
     }
 
     /// Cached covers at once; the rest downloaded four at a time.

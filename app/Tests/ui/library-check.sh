@@ -40,7 +40,10 @@ dump=$("$AX" "$pid")
 check "the window is the Library (no Bottles sidebar)" '! print -r -- "$dump" | grep -q "AXHeading: Bottles"'
 for n in $names; do check "tile: $n" 'print -r -- "$dump" | grep -q "AXButton: $n"'; done
 check "Red Dead Redemption 2 plays (tested on Mac)" 'print -r -- "$dump" | grep -E "AXButton: Red Dead Redemption 2" | grep -qE "Plays great|Runs on this Mac"'
-check "Sainthood: Not tested yet" 'print -r -- "$dump" | grep -E "AXButton: Sainthood" | grep -q "Not tested yet"'
+sleep 6   # installed games the list doesn't know are looked up on Steam's store in the background
+check "Sainthood was looked up on Steam (exact name)" '/usr/bin/python3 -I -c "import json,sys;sys.exit(0 if any(e[\"name\"]==\"Sainthood\" for e in json.load(open(sys.argv[1]))[\"entries\"]) else 1)" "$home/learned-games.json"'
+dump=$("$AX" "$pid")
+check "Sainthood gets an answer from Steam" 'print -r -- "$dump" | grep -E "AXButton: Sainthood" | grep -qE "Should play|Not tested yet|Probably"'
 check "toolbar names the controller" 'print -r -- "$dump" | grep -qE "connected|No controller"'
 "$AX" "$pid" - "Red Dead Redemption 2" >/dev/null; sleep 1
 dump=$("$AX" "$pid")

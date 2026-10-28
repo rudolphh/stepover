@@ -32,6 +32,14 @@ public enum SteamStore {
         }
     }
 
+    /// The one search result whose name is `name` (GameName.normalized, editions kept, so a "Definitive Edition"
+    /// remake never stands in for the original); nil when none or several fit.
+    public static func exactMatch(_ results: [(id: Int, name: String)], for name: String) -> Int? {
+        let key = GameName.normalized(name, dropEdition: false)
+        let same = Set(results.filter { GameName.normalized($0.name, dropEdition: false) == key }.map(\.id))
+        return same.count == 1 ? same.first : nil
+    }
+
     /// Nil when Steam has no data for the game ("success": false), the app isn't a game, or the body isn't its appdetails.
     public static func storeFacts(appdetails: Data, appID: Int, checked: String) -> (name: String, facts: StoreFacts)? {
         guard let root = try? JSONSerialization.jsonObject(with: appdetails) as? [String: Any],

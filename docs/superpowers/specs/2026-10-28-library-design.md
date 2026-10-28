@@ -39,8 +39,10 @@ will and won't work before they spend money, time or disk, and make every defaul
   tell, and with one click when it can't.
 - **G6. Private and offline.** No account and no telemetry. Verdicts come from one cached list, and matching
   your games to it happens on the Mac. Stepover talks only to public pages: the list itself, Steam's image
-  server for cover art of matched games, and Steam's store pages when you search for a game the list doesn't
-  have. It works offline from what it has cached. (my call: art for every matched game is worth Valve's
+  server for cover art, and Steam's store pages: when you search for a game, and once for each installed game
+  the list doesn't know (only its name, or its Steam app id, is sent; only an exact single match is kept;
+  a miss is asked again after 30 days). The maintainer approved that lookup on 2026-10-28 so games like
+  Sainthood get their cover and answers. It works offline from what it has cached. (my call: art for every matched game is worth Valve's
   image server seeing which covers are fetched; it's the same server Steam itself uses)
 
 ## Non-goals
@@ -58,7 +60,7 @@ will and won't work before they spend money, time or disk, and make every defaul
   yet". Only evidence from a Mac earns a "tested on Mac" verdict.
 - **Blocking.** A verdict informs, it never prevents. "Won't run" still has Try Anyway.
 - **Tracking.** No telemetry, no account, and no sending someone's list of games anywhere. Matching happens
-  on the Mac against the downloaded list.
+  on the Mac against the downloaded list; the one exception is G6's single store lookup per unknown game.
 - **Wine words on the Library.** No "bottle", "runtime", "prefix" or "D3DMetal" on the Library screen or the
   verdict card. They live behind Settings.
 

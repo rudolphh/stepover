@@ -133,7 +133,9 @@ game's folder is folded into that game's tile. Each tile is matched to the games
 id, else the exe name, else the program's or bottle's name) and ordered by the last time it was played.
 
 The selected game (else the last played) fills the top: its cover, blurred and tinted by the cover's own
-average color, the verdict and controller answers, Play, and the reasons with their sources. Covers come
+average color, the verdict and controller answers, Play, and the reasons with their sources. An installed game the list doesn't
+know is looked up once on Steam's store (`SteamLookup`: its name, or its app id for a Steam game; exact single
+matches only) and remembered in `<STEPOVER_HOME>/learned-games.json`, misses for 30 days. Covers come
 from Steam's CDN by app id and are cached in `<STEPOVER_HOME>/Art` (a game Steam has no cover for is
 remembered with `<id>.none`; being offline isn't); games without one get a cover made from their icon and
 name. Hidden games are listed in `<STEPOVER_HOME>/library.json` (View > Show Hidden Games). On a first
@@ -166,7 +168,7 @@ The app downloads the list at most once a day (`STEPOVER_GAMES_LIST`, a URL or a
 from), keeps the last good copy in `<STEPOVER_HOME>/games-list.json`, and falls back to the snapshot built
 into `Stepover.app/Contents/Resources/games.json` (release builds; `STEPOVER_GAMES_JSON` for
 `app/build-app.sh`). Matching a program to a game happens on the Mac: Steam app id, else the exe name, else
-the normalized name, and no match rather than a guess when two games fit. Nothing about which games you
+the normalized name, and no match rather than a guess when two games fit. Nothing else about which games you
 have is sent anywhere. The verdicts (will it play, does it work with a controller) are `Verdicts` in
 StepoverKit; their rules and wording are in `docs/superpowers/specs/2026-10-28-library-design.md`.
 

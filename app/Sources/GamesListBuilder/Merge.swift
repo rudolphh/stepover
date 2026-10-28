@@ -152,9 +152,7 @@ public enum Merge {
     /// The one search result whose name is the game's name (GameName.normalized, editions kept, so a
     /// "Definitive Edition" remake never stands in for the original); nil when none or several.
     public static func pickSteamID(_ results: [(id: Int, name: String)], for name: String) -> Int? {
-        let key = GameName.normalized(name, dropEdition: false)
-        let same = Set(results.filter { GameName.normalized($0.name, dropEdition: false) == key }.map(\.id))
-        return same.count == 1 ? same.first : nil
+        SteamStore.exactMatch(results, for: name)
     }
 
     /// Moves entry `id` to "steam:<steam>", merging it into that entry when one exists (the Steam entry's
