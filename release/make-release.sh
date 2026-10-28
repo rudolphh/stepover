@@ -1,44 +1,34 @@
 #!/bin/zsh
 # Builds everything a Stepover release needs into release/dist/<version>/, without publishing:
-#   stepover-runtime-<runtime>.tar.xz   the Wine runtime the app downloads on first launch
-#   Stepover-<version>.zip              the app (runtime manifest embedded)
+#   Stepover-<version>.zip              the app, with the runtime list's current runtime embedded as
+#                                       runtime.json (what a first launch downloads when it can't reach the list)
 #   sources/                          the source archives the LGPL obligations call for
 #   tap/Casks/stepover.rb               the Homebrew cask for the tap repository
 #   SHA256SUMS
+# Runtimes ship on their own (runtime/index.json); an app release no longer carries one.
 # Config (env): STEPOVER_GITHUB_REPO (owner/name, default rudolphh/stepover), STEPOVER_BUNDLE_ID,
-# STEPOVER_RUNTIMES, STEPOVER_RUNTIME (default cx26.3).
+# STEPOVER_DOWNLOADS (the source archives, default <repo>/downloads).
 set -eu
 ROOT="${0:A:h:h}"
 VERSION="$(cat "$ROOT/VERSION")"
 REPO="${STEPOVER_GITHUB_REPO:-rudolphh/stepover}"
 OWNER="${REPO%%/*}"
 BUNDLE_ID="${STEPOVER_BUNDLE_ID:-io.github.$OWNER.stepover}"
-RUNTIMES="${STEPOVER_RUNTIMES:-$HOME/Library/Application Support/Stepover/Runtimes}"
-RUNTIME="${STEPOVER_RUNTIME:-cx26.3}"
-DL="$ROOT/downloads"
+DL="${STEPOVER_DOWNLOADS:-$ROOT/downloads}"
 OUT="$ROOT/release/dist/$VERSION"
-BASE_URL="https://github.com/$REPO/releases/download/v$VERSION"
 
-[ -x "$RUNTIMES/$RUNTIME/bin/wine" ] || { echo "no runtime at $RUNTIMES/$RUNTIME" >&2; exit 1; }
 rm -rf "$OUT"
 mkdir -p "$OUT/sources" "$OUT/tap/Casks"
 
-echo "== runtime archive"
-RT_FILE="stepover-runtime-$RUNTIME.tar.xz"
-COPYFILE_DISABLE=1 tar -c -C "$RUNTIMES" --exclude '.DS_Store' --exclude '.stepover-manifest.json' \
-    "$RUNTIME" | xz -T0 -6 > "$OUT/$RT_FILE"
-RT_SHA="$(shasum -a 256 "$OUT/$RT_FILE" | cut -d' ' -f1)"
-RT_SIZE="$(stat -f %z "$OUT/$RT_FILE")"
-RT_SUMMARY="$(awk -F= '/^wine=/{w=$2} /^d3dmetal=/{d=$2} /^dxmt=/{x=$2} /^dxvk=/{v=$2} END{print w ", D3DMetal " d ", DXMT " x ", DXVK " v}' "$RUNTIMES/$RUNTIME/VERSION")"
-cat > "$OUT/runtime.json" <<EOF
-{
-  "name": "$RUNTIME",
-  "url": "$BASE_URL/$RT_FILE",
-  "sha256": "$RT_SHA",
-  "size": $RT_SIZE,
-  "summary": "$RT_SUMMARY"
-}
-EOF
+echo "== runtime.json (the runtime list's current runtime)"
+/usr/bin/python3 -I - "$ROOT/runtime/index.json" "$OUT/runtime.json" <<'PY'
+import json, sys
+current = [r for r in json.load(open(sys.argv[1])).get("runtimes", []) if r.get("status", "current") == "current"]
+if not current:
+    sys.exit("runtime/index.json has no current runtime")
+json.dump(current[-1], open(sys.argv[2], "w"), indent=2)
+PY
+RT_SIZE="$(/usr/bin/python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["size"])' "$OUT/runtime.json")"
 
 echo "== app"
 STEPOVER_APP="$OUT/Stepover.app" STEPOVER_BIN=none STEPOVER_BUNDLE_ID="$BUNDLE_ID" STEPOVER_VERSION="$VERSION" \
@@ -55,9 +45,9 @@ for f in crossover-sources-26.3.0.tar.gz nettle-3.10.2.tar.gz SDL2-2.32.10.tar.g
     cp -c "$DL/$f" "$OUT/sources/$f"
 done
 COPYFILE_DISABLE=1 tar -czf "$OUT/sources/stepover-$VERSION-source.tar.gz" -C "${ROOT:h}" \
-    --exclude 'stepover/downloads' --exclude 'stepover/sources' --exclude 'stepover/build' \
-    --exclude 'stepover/app/.build' --exclude 'stepover/release/dist' --exclude 'stepover/.git' \
-    --exclude 'stepover/.worktrees' --exclude '.DS_Store' "${ROOT:t}"
+    --exclude "${ROOT:t}/downloads" --exclude "${ROOT:t}/sources" --exclude "${ROOT:t}/build" \
+    --exclude "${ROOT:t}/app/.build" --exclude "${ROOT:t}/release/dist" --exclude "${ROOT:t}/.git" \
+    --exclude "${ROOT:t}/.worktrees" --exclude "${ROOT:t}/.superpowers" --exclude '.DS_Store' "${ROOT:t}"
 
 echo "== cask"
 cat > "$OUT/tap/Casks/stepover.rb" <<EOF
@@ -100,6 +90,6 @@ cask "stepover" do
 end
 EOF
 
-(cd "$OUT" && shasum -a 256 "$RT_FILE" "$APP_FILE" sources/* > SHA256SUMS)
+(cd "$OUT" && shasum -a 256 "$APP_FILE" sources/* > SHA256SUMS)
 echo "release $VERSION in $OUT"
 ls -la "$OUT" "$OUT/sources"

@@ -19,8 +19,9 @@ Homebrew 7 asks you to trust a third-party tap before it installs from it. Stepo
 by Apple (that needs a paid developer account), so the cask removes macOS's download flag and signs
 the app for your Mac when it installs, as other unnotarized open-source Mac apps do.
 
-The first time Stepover opens, it downloads its Wine runtime (about 290 MB) and checks it against the
-checksum built into the app.
+The first time Stepover opens, it downloads its Wine runtime (about 290 MB) and checks its checksum.
+New runtimes appear in the app as they're published and install next to the one you have; each bottle
+picks its Wine version.
 
 **Needs:** an Apple Silicon Mac, macOS 15 Sequoia or later, Rosetta 2
 (`softwareupdate --install-rosetta`), and Homebrew's `winetricks` (installed with the cask).

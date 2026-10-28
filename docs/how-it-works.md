@@ -98,12 +98,30 @@ read). In a bottle with one program, any running non-system process counts as th
 launchers often exit once the game starts. Bring to Front activates the game's process, which Wine
 registers as a regular macOS app.
 
-## The runtime download
+## Runtimes
 
-The app is small; the runtime (`stepover-runtime-<name>.tar.xz`, about 290 MB, 1.1 GB unpacked) is a
-release file named with its SHA-256 in `Stepover.app/Contents/Resources/runtime.json`. The app (or
-`stepover runtime install`) downloads it once, checks the hash, unpacks it into
-`~/Library/Application Support/Stepover/Runtimes/` and clears any quarantine flag.
+Runtimes ship apart from the app. `runtime/index.json` on `main` lists every published runtime (name,
+download, SHA-256, size, summary, release date, `current` / `available` / `pulled`, a note for users,
+`minApp`, `compatFormat`). The app fetches it at launch (`STEPOVER_RUNTIME_INDEX`, a URL or a file path,
+overrides where from), keeps the last good copy in `<STEPOVER_HOME>/runtime-index.json`, and falls back
+to the entry built into `Stepover.app/Contents/Resources/runtime.json`. Entries whose name isn't a plain
+folder name or whose download isn't HTTPS are ignored.
+
+A runtime (about 290 MB, 1.2 GB unpacked) downloads into its own folder under
+`~/Library/Application Support/Stepover/Runtimes/` after a free-space check, its checksum is verified,
+and nothing installed is replaced. The app offers the list's current runtime when it isn't installed
+and this app can use it (`minApp`), never while a game is running; `stepover runtime status`,
+`install [<name>]` and `remove <name>` do the same from Terminal. File > Wine Runtimes lists them and
+keeps the two newest that aren't pulled.
+
+Each bottle picks its **Wine version** on its page: Newest (the default, follows new runtimes) or one
+runtime. A bottle runs on its pinned runtime, else `STEPOVER_RUNTIME`, else the pulled runtime it last ran
+on (recorded in `<bottle>/.stepover-last-runtime`; a bottle is never moved off a runtime by itself), else
+the newest runtime that isn't pulled. Marking a runtime `pulled` with a `note` in the list tells everyone
+on it, with a button to switch.
+
+`stepover-compat.conf` starts with `version = 3`; a runtime's `VERSION` records the format its plug-in
+reads (`compat_format`), so the Fixes section can say when a bottle's runtime can't apply a fix.
 
 ## Rebuild
 
@@ -122,7 +140,7 @@ autoconf, automake, libtool, llvm, lld, nasm, meson, glslang and freetype.
 `STEPOVER_HOME`, `STEPOVER_BOTTLES`, `STEPOVER_RUNTIMES`, `STEPOVER_RUNTIME`, `STEPOVER_LOGS`,
 `STEPOVER_LAUNCHERS`, `STEPOVER_CROSSOVER_BOTTLES`, `STEPOVER_CROSSOVER_APP`, `STEPOVER_CLI`,
 `STEPOVER_WINEDEBUG`, `STEPOVER_COMPAT_DEBUG`, `STEPOVER_D3DMETAL_DIR`, `STEPOVER_DXMT_DIR`,
-`STEPOVER_DXVK_DIR`, `STEPOVER_WINETRICKS`, `STEPOVER_RUNTIME_MANIFEST`, `STEPOVER_RUNTIME_URL`;
+`STEPOVER_DXVK_DIR`, `STEPOVER_WINETRICKS`, `STEPOVER_RUNTIME_INDEX`, `STEPOVER_RUNTIME_MANIFEST`, `STEPOVER_RUNTIME_URL`;
 build and release: `STEPOVER_SRC`, `STEPOVER_BUILD`, `STEPOVER_DOWNLOADS`, `STEPOVER_GPTK_DMG`, `STEPOVER_APP`,
 `STEPOVER_BIN`, `STEPOVER_BUNDLE_ID`, `STEPOVER_VERSION`, `STEPOVER_SOURCE_URL`, `STEPOVER_SPONSOR_URL`, `STEPOVER_RUNTIME_JSON`,
 `STEPOVER_GITHUB_REPO`.

@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Publishes release/dist/<version>/ (from make-release.sh) to GitHub:
 #   1. the source repository STEPOVER_GITHUB_REPO (default rudolphh/stepover), public, created if missing
-#   2. a GitHub release v<version> with the runtime, the app, the sources and SHA256SUMS
+#   2. a GitHub release v<version> with the app, the sources and SHA256SUMS (runtimes ship on their own)
 #   3. the tap repository STEPOVER_TAP_REPO (default <owner>/homebrew-stepover) with Casks/stepover.rb
 # Everything it publishes is public. Needs `gh auth login`.
 set -eu
@@ -32,10 +32,10 @@ fi
 echo "== release v$VERSION"
 if ! gh release view "v$VERSION" --repo "$REPO" >/dev/null 2>&1; then
     gh release create "v$VERSION" --repo "$REPO" --title "Stepover $VERSION" --notes-file - \
-        "$DIST"/Stepover-*.zip "$DIST"/stepover-runtime-*.tar.xz "$DIST"/SHA256SUMS "$DIST"/sources/* <<EOF
+        "$DIST"/Stepover-*.zip "$DIST"/stepover-runtime-*.tar.xz(N) "$DIST"/SHA256SUMS "$DIST"/sources/*(N) <<EOF
 Install: \`brew trust --tap ${TAP_REPO%%/*}/stepover && brew install --cask ${TAP_REPO%%/*}/stepover/stepover\`
 
-$(awk -F'"' '/"summary"/{print $4}' "$DIST/runtime.json"). The app downloads the runtime archive on first launch.
+The app downloads its Wine runtime ($(awk -F'"' '/"summary"/{print $4}' "$DIST/runtime.json")) on first launch, from Stepover's runtime list (runtime/index.json); new runtimes appear in the app as they're published.
 
 The \`sources/\` files are the exact archives this release was built from (CodeWeavers' CrossOver
 26.3 source, nettle, SDL, FFmpeg) and Stepover's own source. Not affiliated with CodeWeavers or
