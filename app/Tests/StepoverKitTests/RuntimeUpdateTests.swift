@@ -34,6 +34,37 @@ final class RuntimeUpdateTests: XCTestCase {
         XCTAssertNil(RuntimeInstaller.offered(index: tooNew, installed: ["cx26.3"], appVersion: "0.3.0"))
     }
 
+    func testFirstInstallRespectsMinAppAndPulled() {
+        let bundled = manifest("cx26.2")
+        // The current runtime needs a newer app: the newest one this app can use.
+        let tooNew = RuntimeIndex(runtimes: [manifest("cx26.3", status: .available), manifest("cx26.4", minApp: "9.0.0")])
+        XCTAssertEqual(RuntimeInstaller.firstInstall(index: tooNew, appVersion: "0.3.0", bundled: bundled)?.name, "cx26.3")
+        // A dev build can use any.
+        XCTAssertEqual(RuntimeInstaller.firstInstall(index: tooNew, appVersion: nil, bundled: bundled)?.name, "cx26.4")
+        // Current wins over a later available entry.
+        let both = RuntimeIndex(runtimes: [manifest("cx26.3"), manifest("cx26.4", status: .available)])
+        XCTAssertEqual(RuntimeInstaller.firstInstall(index: both, appVersion: "0.3.0", bundled: bundled)?.name, "cx26.3")
+        // Nothing in the list fits: the runtime this app was built with.
+        let none = RuntimeIndex(runtimes: [manifest("cx26.4", minApp: "9.0.0")])
+        XCTAssertEqual(RuntimeInstaller.firstInstall(index: none, appVersion: "0.3.0", bundled: bundled)?.name, "cx26.2")
+        // ...unless that one was pulled.
+        let pulledBundled = RuntimeIndex(runtimes: [manifest("cx26.2", status: .pulled), manifest("cx26.4", minApp: "9.0.0")])
+        XCTAssertNil(RuntimeInstaller.firstInstall(index: pulledBundled, appVersion: "0.3.0", bundled: bundled))
+    }
+
+    func testInstallRejectsMalformedURL() async throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("runtimes-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: dir) }
+        do {
+            _ = try await RuntimeInstaller.install(manifest("cx26.4", url: "https://exa mple.com/x.tar.xz", size: 1),
+                                                   into: dir.appendingPathComponent("Runtimes"))
+            XCTFail("a download address that isn't a URL must not install")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "the runtime's download address isn't valid: https://exa mple.com/x.tar.xz")
+        }
+    }
+
     func testFailedInstallLeavesRuntimesAlone() async throws {
         let fm = FileManager.default
         let dir = fm.temporaryDirectory.appendingPathComponent("runtimes-\(UUID().uuidString)")

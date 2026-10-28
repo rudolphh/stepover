@@ -29,7 +29,7 @@ final class Store: ObservableObject {
     init() {
         reload()
         Task { _ = await FixLibrary.update(); refreshFixes() }  // quietly; offline just keeps the last copy
-        Task { if await RuntimeIndex.fetch() { index = RuntimeIndex.load() } }
+        refreshIndex()
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refreshRunning() }
         }
@@ -37,11 +37,14 @@ final class Store: ObservableObject {
 
     var selected: Bottle? { bottles.first { $0.id == selection } }
 
-    /// Each bottle's pinned runtime and the one it runs on now, for the Wine Runtimes window.
+    /// Each bottle's pinned runtime and the one it uses now (a running bottle: the one its Wine started on),
+    /// for the Wine Runtimes window.
     var runtimeUsers: [(name: String, pinned: String?, resolved: String?)] {
         bottles.map { bottle in
             let config = config(bottle)
-            return (bottle.name, config.runtime, bottle.runtime(config)?.name)
+            return (bottle.name, config.runtime,
+                    RuntimeCatalog.inUse(resolved: bottle.runtime(config)?.name, running: running.contains(bottle.id),
+                                         lastRuntime: bottle.lastRuntime))
         }
     }
 
@@ -67,8 +70,13 @@ final class Store: ObservableObject {
         objectWillChange.send()
     }
 
-    /// The runtime a first install downloads.
-    var manifest: RuntimeManifest? { index.current }
+    /// Fetches the runtime list from GitHub (at launch, on Reload and when Wine Runtimes opens); offline keeps the cache.
+    func refreshIndex() {
+        Task { if await RuntimeIndex.fetch() { index = RuntimeIndex.load() } }
+    }
+
+    /// The runtime a first install downloads: one this app can use.
+    var manifest: RuntimeManifest? { RuntimeInstaller.firstInstall(index: index, appVersion: Paths.appVersion) }
 
     /// A new runtime to offer, never while a game is running.
     var runtimeUpdate: RuntimeManifest? {

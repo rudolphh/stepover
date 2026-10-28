@@ -80,6 +80,17 @@ public enum RuntimeInstaller {
         return current
     }
 
+    /// The runtime a first install gets: the newest current runtime in the list this app can use (else the newest
+    /// available one), else the runtime the app was built with unless it was pulled. Nil: this app is too old for
+    /// every runtime in the list.
+    public static func firstInstall(index: RuntimeIndex, appVersion: String?,
+                                    bundled: RuntimeManifest? = RuntimeManifest.bundled()) -> RuntimeManifest? {
+        let usable = index.runtimes.filter { $0.status != .pulled && $0.supports(appVersion: appVersion) }
+        if let pick = usable.last(where: { ($0.status ?? .current) == .current }) ?? usable.last { return pick }
+        guard let bundled, !index.pulled.contains(bundled.name) else { return nil }
+        return bundled
+    }
+
     /// Downloads (or copies, for file:// URLs and plain paths), verifies and unpacks a runtime.
     /// `progress` gets values from 0 to 1 while downloading. Replacing a runtime under running
     /// Wine processes could crash them, so this refuses while any bottle is running, both before
@@ -88,6 +99,15 @@ public enum RuntimeInstaller {
     public static func install(_ manifest: RuntimeManifest, into runtimes: URL = Paths.runtimes,
                                progress: (@Sendable (Double) -> Void)? = nil) async throws -> Runtime {
         let fm = FileManager.default
+        let source: URL
+        if manifest.url.contains("://") {
+            guard let url = URL(string: manifest.url), url.isFileURL || url.host?.isEmpty == false else {
+                throw StepoverError.message("the runtime's download address isn't valid: \(manifest.url)")
+            }
+            source = url
+        } else {
+            source = URL(fileURLWithPath: manifest.url)
+        }
         try ensureNothingRunning(manifest, in: runtimes)
         try fm.createDirectory(at: runtimes, withIntermediateDirectories: true)
         if let free = try? runtimes.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
@@ -99,7 +119,6 @@ public enum RuntimeInstaller {
         let archive = work.appendingPathComponent("\(manifest.name).tar.xz")
         try? fm.removeItem(at: archive)
 
-        let source = manifest.url.contains("://") ? URL(string: manifest.url)! : URL(fileURLWithPath: manifest.url)
         if source.isFileURL {
             try fm.copyItem(at: source, to: archive)
         } else {

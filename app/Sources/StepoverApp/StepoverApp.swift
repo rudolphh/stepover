@@ -19,8 +19,8 @@ struct StepoverApp: App {
         }
         .commands {
             CommandGroup(after: .newItem) {
-                Button("Reload Bottles") { store.reload() }.keyboardShortcut("r")
-                Button("Wine Runtimes…") { store.showRuntimes = true }
+                Button("Reload Bottles") { store.reload(); store.refreshIndex() }.keyboardShortcut("r")
+                Button("Wine Runtimes…") { store.refreshIndex(); store.showRuntimes = true }
             }
             CommandMenu("Fixes") {
                 Button("Update Fixes") { store.updateFixes() }
@@ -458,6 +458,9 @@ struct RuntimeSetupView: View {
                 }
                 Text("Apple's D3DMetal is free for non-commercial use on Apple hardware; licenses are under Help.")
                     .font(.caption).foregroundStyle(.tertiary)
+            } else if !store.index.runtimes.isEmpty {
+                Text("The Wine runtime needs a newer Stepover. Update Stepover (in Terminal: brew upgrade --cask stepover), then open it again.")
+                    .multilineTextAlignment(.center).frame(maxWidth: 460).foregroundStyle(.secondary)
             } else {
                 Text("This build has no runtime download. Build one with ~/.local/src/stepover/runtime, or run `stepover runtime install --from <file>`.")
                     .multilineTextAlignment(.center).frame(maxWidth: 460).foregroundStyle(.secondary)

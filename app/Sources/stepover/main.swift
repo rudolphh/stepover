@@ -214,7 +214,7 @@ do {
                 guard let entry = index.runtimes.first(where: { $0.name == name }) else { fail("\(name) isn't in the runtime list") }
                 manifest = entry
             } else if let entry = RuntimeInstaller.offered(index: index, installed: installed, appVersion: Paths.appVersion)
-                        ?? (installed.isEmpty ? index.current : nil) {
+                        ?? (installed.isEmpty ? RuntimeInstaller.firstInstall(index: index, appVersion: Paths.appVersion) : nil) {
                 manifest = entry
             } else {
                 print("nothing new to install (installed: \(installed.joined(separator: ", ")))")

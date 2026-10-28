@@ -40,6 +40,12 @@ final class RuntimeIndexTests: XCTestCase {
         XCTAssertEqual(RuntimeIndex.decode(data, allowLocal: true)?.runtimes.map(\.name), ["cx26.5", "cx26.4-2"])
     }
 
+    func testIndexDropsMalformedURLs() {
+        let data = json([entry("cx26.3", url: "https://exa mple.com/x.tar.xz"), entry("cx26.4", url: "https://[/x"),
+                         entry("cx26.5", url: "https:///x.tar.xz"), entry("cx26.6")])
+        XCTAssertEqual(RuntimeIndex.decode(data)?.runtimes.map(\.name), ["cx26.6"])
+    }
+
     func testIndexPulledNames() {
         let index = RuntimeIndex.decode(json([entry("cx26.3", status: "current"), entry("cx26.4", status: "pulled", note: "breaks RDR2")]))
         XCTAssertEqual(index?.pulled, ["cx26.4"])

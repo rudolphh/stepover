@@ -25,7 +25,7 @@ public struct RuntimeIndex: Codable, Sendable {
     public static func decode(_ data: Data, allowLocal: Bool = false) -> RuntimeIndex? {
         guard var index = try? JSONDecoder().decode(RuntimeIndex.self, from: data) else { return nil }
         index.runtimes = index.runtimes.filter { entry in
-            isFolderName(entry.name) && (entry.url.hasPrefix("https://") || (allowLocal && isLocal(entry.url)))
+            isFolderName(entry.name) && (isDownloadURL(entry.url) || (allowLocal && isLocal(entry.url)))
         }
         return index
     }
@@ -72,6 +72,12 @@ public struct RuntimeIndex: Codable, Sendable {
         } catch {
             return false
         }
+    }
+
+    /// An https:// address with a host (a typo like "https://exa mple.com" isn't a URL at all).
+    static func isDownloadURL(_ location: String) -> Bool {
+        guard location.hasPrefix("https://"), let host = URL(string: location)?.host else { return false }
+        return !host.isEmpty
     }
 
     static func isLocal(_ location: String) -> Bool { !location.contains("://") || location.hasPrefix("file://") }

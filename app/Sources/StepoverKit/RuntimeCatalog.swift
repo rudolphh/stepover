@@ -12,11 +12,17 @@ public enum RuntimeCatalog {
         bottles.filter { $0.pinned == runtime || $0.resolved == runtime }.map(\.name).sorted()
     }
 
+    /// The runtime a bottle is using, for the Wine Runtimes window. A running bottle stays on the runtime its Wine
+    /// started with (lastRuntime, written as Wine starts) even after its pin changes; otherwise the one it runs on now.
+    public static func inUse(resolved: String?, running: Bool, lastRuntime: String?) -> String? {
+        running ? (lastRuntime ?? resolved) : resolved
+    }
+
     /// Deletes a runtime, unless a bottle that uses it is running. Bottles pinned to it fall back to the
     /// newest good runtime (Runtime.choose); the app asks before calling this when any bottle uses it.
     public static func remove(_ runtime: Runtime, bottles: [Bottle],
                               resolved: (Bottle) -> String? = { $0.runtime($0.loadConfig())?.name }) throws {
-        if let busy = bottles.first(where: { resolved($0) == runtime.name && $0.isRunning }) {
+        if let busy = bottles.first(where: { $0.isRunning && ($0.lastRuntime == runtime.name || resolved($0) == runtime.name) }) {
             throw StepoverError.message("\(busy.name) is running on \(runtime.name); quit it first")
         }
         try FileManager.default.removeItem(at: runtime.url)

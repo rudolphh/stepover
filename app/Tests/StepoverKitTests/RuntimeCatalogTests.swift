@@ -29,13 +29,10 @@ final class RuntimeCatalogTests: XCTestCase {
         XCTAssertEqual(RuntimeCatalog.users(of: "cx26.3", bottles: bottles), ["A", "C"])
     }
 
-    func testRemoveRefusesWhileRunning() throws {
-        let runtime = try fakeRuntime("cx26.3")
-        let bottleURL = dir.appendingPathComponent("Game")
-        try FileManager.default.createDirectory(at: bottleURL, withIntermediateDirectories: true)
-        let bottle = Bottle(url: bottleURL)
+    /// Holds the bottle's wineserver lock from another process, as a running wineserver does
+    /// (a process never sees its own lock with F_GETLK). Terminate the returned process to release it.
+    private func holdServerLock(_ bottle: Bottle) throws -> Process {
         let lock = try XCTUnwrap(bottle.serverLockPath)
-        // Another process holds the lock, as a wineserver does (a process never sees its own lock with F_GETLK).
         let holder = Process()
         holder.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
         holder.arguments = ["-I", "-c", """
@@ -46,17 +43,50 @@ final class RuntimeCatalogTests: XCTestCase {
         let out = Pipe()
         holder.standardOutput = out
         try holder.run()
-        defer {
-            holder.terminate(); holder.waitUntilExit()
-            try? FileManager.default.removeItem(atPath: (lock as NSString).deletingLastPathComponent)
-        }
         _ = out.fileHandleForReading.availableData   // waits for "locked"
+        return holder
+    }
+
+    private func release(_ holder: Process, _ bottle: Bottle) {
+        holder.terminate(); holder.waitUntilExit()
+        if let lock = bottle.serverLockPath { try? FileManager.default.removeItem(atPath: (lock as NSString).deletingLastPathComponent) }
+    }
+
+    func testRemoveRefusesWhileRunning() throws {
+        let runtime = try fakeRuntime("cx26.3")
+        let bottleURL = dir.appendingPathComponent("Game")
+        try FileManager.default.createDirectory(at: bottleURL, withIntermediateDirectories: true)
+        let bottle = Bottle(url: bottleURL)
+        let holder = try holdServerLock(bottle)
+        defer { release(holder, bottle) }
         XCTAssertTrue(bottle.isRunning)
 
         XCTAssertThrowsError(try RuntimeCatalog.remove(runtime, bottles: [bottle], resolved: { _ in "cx26.3" })) { error in
             XCTAssertEqual(error.localizedDescription, "Game is running on cx26.3; quit it first")
         }
         XCTAssertTrue(FileManager.default.fileExists(atPath: runtime.url.path))
+    }
+
+    /// The pin changed while the game runs: Wine is still on the runtime it started with (lastRuntime).
+    func testRemoveRefusesWhileRunningOnLastRuntimeAfterPinChange() throws {
+        let runtime = try fakeRuntime("cx26.3")
+        let bottleURL = dir.appendingPathComponent("Game")
+        try FileManager.default.createDirectory(at: bottleURL, withIntermediateDirectories: true)
+        let bottle = Bottle(url: bottleURL)
+        bottle.lastRuntime = "cx26.3"
+        let holder = try holdServerLock(bottle)
+        defer { release(holder, bottle) }
+
+        XCTAssertThrowsError(try RuntimeCatalog.remove(runtime, bottles: [bottle], resolved: { _ in "cx26.5" })) { error in
+            XCTAssertEqual(error.localizedDescription, "Game is running on cx26.3; quit it first")
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: runtime.url.path))
+    }
+
+    func testRunningBottleCountsAsUserOfItsLastRuntime() {
+        XCTAssertEqual(RuntimeCatalog.inUse(resolved: "cx26.5", running: true, lastRuntime: "cx26.3"), "cx26.3")
+        XCTAssertEqual(RuntimeCatalog.inUse(resolved: "cx26.5", running: false, lastRuntime: "cx26.3"), "cx26.5")
+        XCTAssertEqual(RuntimeCatalog.inUse(resolved: "cx26.5", running: true, lastRuntime: nil), "cx26.5")
     }
 
     func testRemoveDeletesIdleRuntime() throws {
