@@ -1,9 +1,11 @@
 import AppKit
+import CoreImage
 import StepoverKit
 import SwiftUI
 
 /// The first screen: your games as cover art, with the two plain answers (will it play on this Mac, does it
-/// work with a controller) and why. Spec: docs/superpowers/specs/2026-10-28-library-design.md.
+/// work with a controller) and why. The selected game (else the last played) fills the hero at the top,
+/// tinted by its own cover. Spec: docs/superpowers/specs/2026-10-28-library-design.md.
 struct LibraryView: View {
     @EnvironmentObject var store: Store
     @State private var selection: String?
@@ -15,7 +17,7 @@ struct LibraryView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
+        Group {
             if games.isEmpty {
                 ContentUnavailableView {
                     Label("No games yet", systemImage: "gamecontroller")
@@ -25,27 +27,26 @@ struct LibraryView: View {
                     Button("New Bottle…") { showCreate = true }.buttonStyle(.borderedProminent)
                     if store.hasCrossOver { Button("Import from CrossOver…") { showImport = true } }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Text("Your games").font(.title2.bold())
-                            Text("Last played first").font(.callout).foregroundStyle(.secondary)
-                        }
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 24, alignment: .top)],
-                                  alignment: .leading, spacing: 22) {
-                            ForEach(games) { game in
-                                GameTile(game: game, selected: selection == game.id) { selection = game.id }
+                VStack(spacing: 0) {
+                    if let hero = games.first(where: { $0.id == selection }) ?? games.first {
+                        HeroView(game: hero).id(hero.id)
+                    }
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                Text("Your games").font(.title3.weight(.semibold))
+                                Text("Last played first").font(.callout).foregroundStyle(.secondary)
+                            }
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140, maximum: 168), spacing: 22, alignment: .top)],
+                                      alignment: .leading, spacing: 26) {
+                                ForEach(games) { game in
+                                    GameTile(game: game, selected: (selection ?? games.first?.id) == game.id) { selection = game.id }
+                                }
                             }
                         }
+                        .padding(.horizontal, 28).padding(.vertical, 22)
                     }
-                    .padding(24)
-                }
-                .frame(maxWidth: .infinity)
-                if let game = games.first(where: { $0.id == selection }) {
-                    Divider()
-                    GameDetail(game: game).frame(width: 340)
                 }
             }
         }
@@ -102,6 +103,83 @@ extension TileTone {
     }
 }
 
+/// A verdict as a tinted capsule: the word always travels with its color.
+struct VerdictPill: View {
+    let text: String
+    let tone: TileTone
+    var large = false
+
+    var body: some View {
+        HStack(spacing: large ? 7 : 5) {
+            Circle().fill(tone.color).frame(width: large ? 8 : 6, height: large ? 8 : 6)
+            Text(text).lineLimit(large ? 2 : 1)
+        }
+        .font(large ? .callout.weight(.semibold) : .caption.weight(.semibold))
+        .foregroundStyle(tone.color)
+        .padding(.horizontal, large ? 11 : 8).padding(.vertical, large ? 6 : 3)
+        .background(tone.color.opacity(tone == .unknown ? 0.12 : 0.16), in: Capsule())
+    }
+}
+
+/// A 2:3 cover clipped to its corners: Steam's art, else a cover made from the game's icon and name.
+struct CoverView: View {
+    @EnvironmentObject var store: Store
+    let game: LibraryGame
+
+    var body: some View {
+        Color.clear
+            .aspectRatio(2 / 3, contentMode: .fit)
+            .overlay {
+                if let id = game.steamAppID, let image = store.art[id] {
+                    Image(nsImage: image).resizable().scaledToFill()
+                } else {
+                    PlaceholderCover(game: game)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
+/// Two muted tones picked from the name (the same every launch), the program's icon and the title.
+struct PlaceholderCover: View {
+    @EnvironmentObject var store: Store
+    let game: LibraryGame
+
+    var body: some View {
+        let hue = Self.hue(game.name)
+        ZStack(alignment: .bottomLeading) {
+            LinearGradient(colors: [Color(hue: hue, saturation: 0.38, brightness: 0.42),
+                                    Color(hue: (hue + 0.07).truncatingRemainder(dividingBy: 1), saturation: 0.5, brightness: 0.18)],
+                           startPoint: .top, endPoint: .bottom)
+            VStack {
+                Group {
+                    if game.isSteamClient {
+                        Image(systemName: "bag").font(.system(size: 38, weight: .light))
+                    } else if let icon = store.icon(for: game.launch, in: game.bottle) {
+                        Image(nsImage: icon).resizable().frame(width: 64, height: 64).shadow(radius: 8, y: 3)
+                    } else {
+                        Image(systemName: "gamecontroller").font(.system(size: 38, weight: .light))
+                    }
+                }
+                .foregroundStyle(.white.opacity(0.85))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            Text(game.name)
+                .font(.system(size: 17, weight: .bold).width(.expanded))
+                .foregroundStyle(.white)
+                .lineLimit(3)
+                .padding(12)
+        }
+    }
+
+    static func hue(_ name: String) -> Double {
+        var hash: UInt64 = 5381
+        for byte in name.utf8 { hash = hash &* 33 &+ UInt64(byte) }
+        return Double(hash % 360) / 360
+    }
+}
+
 struct GameTile: View {
     @EnvironmentObject var store: Store
     let game: LibraryGame
@@ -111,32 +189,30 @@ struct GameTile: View {
 
     var body: some View {
         let verdict = Verdicts.play(game.entry)
-        ZStack(alignment: .top) {
-            Button(action: select) {
-                VStack(alignment: .leading, spacing: 5) {
-                    GameArtView(game: game)
-                        .frame(height: 230)
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.accentColor, lineWidth: selected ? 3 : 0))
-                    Text(game.name).font(.headline).lineLimit(2)
+        Button(action: select) {
+            VStack(alignment: .leading, spacing: 8) {
+                CoverView(game: game)
+                    .shadow(color: .black.opacity(hovering ? 0.45 : 0.25), radius: hovering ? 12 : 6, y: hovering ? 6 : 3)
+                    .padding(4)
+                    .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 3))
+                    .scaleEffect(hovering ? 1.02 : 1)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(game.name).font(.system(size: 13, weight: .semibold)).lineLimit(2)
                     if game.isSteamClient {
                         Text("Your Steam games show up here").font(.caption).foregroundStyle(.secondary)
                     } else {
-                        Text("● " + verdict.kind.short).font(.caption).foregroundStyle(verdict.kind.tone.color)
-                        if let controller = Verdicts.controller(game.entry) {
-                            Text(controller.short).font(.caption).foregroundStyle(.secondary)
-                        }
+                        VerdictPill(text: verdict.kind.short, tone: verdict.kind.tone)
                     }
                     if store.hidden.contains(game.id) { Text("Hidden").font(.caption2).foregroundStyle(.tertiary) }
                 }
-                .contentShape(Rectangle())
+                .padding(.horizontal, 4)
             }
-            .buttonStyle(.plain)
-            .simultaneousGesture(TapGesture(count: 2).onEnded { store.playGame(game) })
-            if hovering || selected {
-                PlayButton(game: game).padding(.top, 182)
-            }
+            .contentShape(Rectangle())
         }
-        .onHover { hovering = $0 }
+        .buttonStyle(.plain)
+        .onHover { over in withAnimation(.easeOut(duration: 0.15)) { hovering = over } }
+        .simultaneousGesture(TapGesture(count: 2).onEnded { store.playGame(game) })
         .contextMenu {
             Button("Play") { store.playGame(game) }.disabled(!store.runtimeReady)
             Button("Settings") { store.openSettings(game) }
@@ -165,9 +241,10 @@ struct PlayButton: View {
 
     var body: some View {
         Button { store.playGame(game) } label: {
-            Label("Play", systemImage: "play.fill").padding(.horizontal, 6)
+            Label("Play", systemImage: "play.fill").font(.headline).padding(.horizontal, 14).padding(.vertical, 3)
         }
         .buttonStyle(.borderedProminent)
+        .controlSize(.large)
         .disabled(!store.runtimeReady)
         .help(waitReason ?? "Play \(game.name)")
     }
@@ -179,81 +256,83 @@ struct PlayButton: View {
     }
 }
 
-/// Cover art, else the program's own icon on a tinted tile with its name.
-struct GameArtView: View {
-    @EnvironmentObject var store: Store
-    let game: LibraryGame
-
-    var body: some View {
-        if let id = game.steamAppID, let image = store.art[id] {
-            Image(nsImage: image).resizable().aspectRatio(2 / 3, contentMode: .fill)
-                .frame(maxWidth: .infinity, maxHeight: .infinity).clipShape(RoundedRectangle(cornerRadius: 10))
-                .accessibilityHidden(true)
-        } else {
-            RoundedRectangle(cornerRadius: 10).fill(.quaternary)
-                .overlay {
-                    VStack(spacing: 10) {
-                        if game.isSteamClient {
-                            Image(systemName: "bag").font(.system(size: 40)).foregroundStyle(.secondary)
-                        } else if let icon = store.icon(for: game.launch, in: game.bottle) {
-                            Image(nsImage: icon).resizable().frame(width: 56, height: 56)
-                        } else {
-                            Image(systemName: "gamecontroller").font(.system(size: 40)).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .accessibilityHidden(true)
-        }
-    }
-}
-
-struct GameDetail: View {
+/// The selected game, large: its cover blurred into a backdrop tinted by the cover's own color, the title,
+/// both answers, Play, and what the answer is based on. Always dark, so the text reads on any cover.
+struct HeroView: View {
     @EnvironmentObject var store: Store
     let game: LibraryGame
 
     var body: some View {
         let verdict = Verdicts.play(game.entry)
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack(alignment: .bottom, spacing: 16) {
-                    GameArtView(game: game).frame(width: 96, height: 144)
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(game.name).font(.title2.bold()).fixedSize(horizontal: false, vertical: true)
-                        HStack {
-                            PlayButton(game: game)
-                            Button("Settings") { store.openSettings(game) }
+        let image = game.steamAppID.flatMap { store.art[$0] }
+        let tint = game.steamAppID.flatMap { store.tint[$0] }.map(Color.init(nsColor:))
+            ?? Color(hue: PlaceholderCover.hue(game.name), saturation: 0.4, brightness: 0.35)
+        HStack(alignment: .top, spacing: 26) {
+            CoverView(game: game).frame(width: 156).shadow(color: .black.opacity(0.5), radius: 16, y: 8)
+            VStack(alignment: .leading, spacing: 14) {
+                Text(game.name)
+                    .font(.system(size: 34, weight: .bold).width(.expanded))
+                    .lineLimit(2).minimumScaleFactor(0.6)
+                if game.isSteamClient {
+                    Text("Open Steam to buy, install and update games. Games you install show up here by themselves.")
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                } else {
+                    HStack(spacing: 8) {
+                        VerdictPill(text: verdict.headline, tone: verdict.kind.tone, large: true)
+                        if let controller = Verdicts.controller(game.entry) {
+                            Label(controller.rawValue, systemImage: "gamecontroller")
+                                .font(.callout.weight(.medium)).lineLimit(2)
+                                .padding(.horizontal, 11).padding(.vertical, 6)
+                                .background(.white.opacity(0.1), in: Capsule())
                         }
                     }
                 }
-                if game.isSteamClient {
-                    Text("Open Steam to buy, install and update games. Games you install show up here by themselves.")
-                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                } else {
-                    section("Will it play?") {
-                        Text("● " + verdict.headline).font(.headline).foregroundStyle(verdict.kind.tone.color)
-                            .fixedSize(horizontal: false, vertical: true)
-                        ForEach(verdict.extra, id: \.self) { line in
-                            Text(line).font(.callout.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 10) {
+                    PlayButton(game: game)
+                    Button("Settings") { store.openSettings(game) }.controlSize(.large)
+                }
+                if !game.isSteamClient && !(verdict.extra.isEmpty && verdict.reasons.isEmpty) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(verdict.extra, id: \.self) { Text($0).font(.callout.weight(.semibold)) }
+                        if !verdict.reasons.isEmpty {
+                            Text("Based on").font(.caption).foregroundStyle(.secondary).padding(.top, 2)
+                            ForEach(Array(verdict.reasons.enumerated()), id: \.offset) { _, reason in
+                                (Text(reason.text) + Text(reason.source.map { "  " + $0 } ?? "").foregroundColor(.secondary))
+                                    .font(.callout).lineLimit(2)
+                            }
                         }
-                        ForEach(Array(verdict.reasons.enumerated()), id: \.offset) { _, reason in
-                            (Text(reason.text) + Text(reason.source.map { "  " + $0 } ?? "").foregroundColor(.secondary))
-                                .font(.callout).fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    Divider()
-                    section("Controller") {
-                        Text(Verdicts.controller(game.entry)?.rawValue ?? "Not known yet").font(.headline)
                     }
                 }
             }
-            .padding(22)
+            .frame(maxWidth: 720, alignment: .leading)
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 32).padding(.top, 26).padding(.bottom, 24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ZStack {
+                tint
+                if let image {
+                    Image(nsImage: image).resizable().scaledToFill().blur(radius: 60).opacity(0.5)
+                }
+                LinearGradient(colors: [.black.opacity(0.25), .black.opacity(0.7)], startPoint: .top, endPoint: .bottom)
+            }
+            .clipped()
+            .accessibilityHidden(true)
+        }
+        .environment(\.colorScheme, .dark)
     }
+}
 
-    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased()).font(.caption.weight(.bold)).foregroundStyle(.secondary)
-            content()
-        }
+extension NSImage {
+    /// The image's average color (CoreImage's area average), for the hero's tint.
+    var averageColor: NSColor? {
+        guard let tiff = tiffRepresentation, let input = CIImage(data: tiff) else { return nil }
+        let filter = CIFilter(name: "CIAreaAverage", parameters: [kCIInputImageKey: input, kCIInputExtentKey: CIVector(cgRect: input.extent)])
+        guard let output = filter?.outputImage else { return nil }
+        var pixel = [UInt8](repeating: 0, count: 4)
+        CIContext(options: [.workingColorSpace: NSNull()])
+            .render(output, toBitmap: &pixel, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1), format: .RGBA8, colorSpace: nil)
+        return NSColor(red: CGFloat(pixel[0]) / 255, green: CGFloat(pixel[1]) / 255, blue: CGFloat(pixel[2]) / 255, alpha: 1)
     }
 }

@@ -38,6 +38,8 @@ final class Store: ObservableObject {
     }
     /// Cover art by Steam app id, filled in as downloads land.
     @Published var art: [Int: NSImage] = [:]
+    /// Each cover's average color, for the hero's tint (worked out once, when the cover lands).
+    var tint: [Int: NSColor] = [:]
     /// The first connected game controller's name, nil when none.
     @Published var controllerName: String?
     /// The first runtime download failed; the toolbar offers Retry instead of an alert.
@@ -152,7 +154,7 @@ final class Store: ObservableObject {
         artRequested.formUnion(wanted)
         var missing: [Int] = []
         for id in wanted.sorted() {
-            if let file = GameArt.cached(id), let image = NSImage(contentsOf: file) { art[id] = image } else { missing.append(id) }
+            if let file = GameArt.cached(id), let image = NSImage(contentsOf: file) { setArt(id, image) } else { missing.append(id) }
         }
         guard !missing.isEmpty else { return }
         Task {
@@ -164,9 +166,14 @@ final class Store: ObservableObject {
                     for await (id, url) in group { if let url { out.append((id, url)) } }
                     return out
                 }
-                for (id, url) in landed { if let image = NSImage(contentsOf: url) { art[id] = image } }
+                for (id, url) in landed { if let image = NSImage(contentsOf: url) { setArt(id, image) } }
             }
         }
+    }
+
+    private func setArt(_ id: Int, _ image: NSImage) {
+        tint[id] = image.averageColor
+        art[id] = image
     }
 
     func playGame(_ game: LibraryGame) {
