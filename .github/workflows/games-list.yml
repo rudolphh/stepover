@@ -13,6 +13,10 @@ on:
         description: Upload games.json to the games-list release (off = build and keep it as an artifact only)
         type: boolean
         default: true
+  # a test branch builds the list without publishing it (the Publish step only runs on the schedule or when asked)
+  push:
+    branches: ["games-list/**"]
+    paths: ["app/**", "fixes/**", ".github/workflows/games-list.yml"]
 
 permissions:
   contents: write
