@@ -45,11 +45,24 @@ public struct Runtime: Hashable, Sendable {
             .sorted { $0.compare($1, options: .numeric) == .orderedAscending }
     }
 
-    /// The named runtime, else STEPOVER_RUNTIME, else the newest installed one.
-    public static func resolve(_ name: String?) -> Runtime? {
+    /// Which installed runtime a bottle runs on; the first rule that matches wins: its pinned runtime,
+    /// STEPOVER_RUNTIME, the pulled runtime it last ran on (a bottle is never moved off a runtime by
+    /// itself), the newest that isn't pulled, the newest. `installed` is oldest first (`ordered`).
+    public static func choose(pinned: String?, lastUsed: String?, installed: [String], pulled: Set<String>,
+                              preferred: String?) -> String? {
+        if let pinned, installed.contains(pinned) { return pinned }
+        if let preferred, installed.contains(preferred) { return preferred }
+        if let lastUsed, pulled.contains(lastUsed), installed.contains(lastUsed) { return lastUsed }
+        return installed.last { !pulled.contains($0) } ?? installed.last
+    }
+
+    /// The named runtime, else STEPOVER_RUNTIME, else the newest installed one that isn't pulled.
+    public static func resolve(_ name: String?) -> Runtime? { resolve(pinned: name, lastUsed: nil) }
+
+    static func resolve(pinned: String?, lastUsed: String?) -> Runtime? {
         let all = installed()
-        if let name, let match = all.first(where: { $0.name == name }) { return match }
-        if let fallback = Paths.defaultRuntimeName, let match = all.first(where: { $0.name == fallback }) { return match }
-        return all.last
+        let name = choose(pinned: pinned, lastUsed: lastUsed, installed: all.map(\.name),
+                          pulled: RuntimeIndex.load().pulled, preferred: Paths.defaultRuntimeName)
+        return all.first { $0.name == name }
     }
 }

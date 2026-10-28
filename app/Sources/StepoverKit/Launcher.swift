@@ -79,6 +79,10 @@ public enum Launcher {
         guard let runtime = bottle.runtime(config) else {
             throw StepoverError.message("No Wine runtime installed in \(Paths.runtimes.path)")
         }
+        if let pinned = config.runtime, pinned != runtime.name {
+            appendLog(bottle, "pinned runtime \(pinned) is missing; using \(runtime.name)")
+        }
+        if bottle.lastRuntime != runtime.name { bottle.lastRuntime = runtime.name }
         if !bottle.isRunning { config = try SetupStamp.reconcile(bottle, config, runtime: runtime) }
         try prepare(bottle: bottle, config: config, runtime: runtime)
         return (runtime, environment(bottle: bottle, config: config, runtime: runtime, program: program))

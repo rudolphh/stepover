@@ -52,7 +52,23 @@ public struct Bottle: Hashable, Identifiable, Sendable {
         try config.compatConf(fixes: matched).write(to: compatURL, atomically: true, encoding: .utf8)
     }
 
-    public func runtime(_ config: BottleConfig) -> Runtime? { Runtime.resolve(config.runtime) }
+    public func runtime(_ config: BottleConfig) -> Runtime? { Runtime.resolve(pinned: config.runtime, lastUsed: lastRuntime) }
+
+    /// The runtime this bottle last ran on (Launcher.session records it). Kept beside stepover.json, not in
+    /// it: the app and the stepover command both write stepover.json, and the app's in-memory copy would
+    /// overwrite a value the command wrote.
+    public var lastRuntime: String? {
+        get {
+            (try? String(contentsOf: lastRuntimeFile, encoding: .utf8))
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
+        }
+        nonmutating set {
+            if let newValue { try? (newValue + "\n").write(to: lastRuntimeFile, atomically: true, encoding: .utf8) }
+            else { try? FileManager.default.removeItem(at: lastRuntimeFile) }
+        }
+    }
+
+    var lastRuntimeFile: URL { url.appendingPathComponent(".stepover-last-runtime") }
 
     /// True while the bottle's wineserver holds the lock in its server directory
     /// (/tmp/.wine-<uid>/server-<dev>-<inode>/lock), whichever Wine started it.
