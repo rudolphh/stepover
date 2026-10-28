@@ -9,6 +9,8 @@
 #   lib/dxmt/{i386,x86_64}-windows, x86_64-unix
 set -euo pipefail
 source "$(dirname "$0")/config.sh"
+# The compat plug-in comes from the same checkout as this script ($SRC_ROOT may point at another one).
+COMPAT_SRC="$(cd "$(dirname "$0")/.." && pwd)/compat/stepovercompat.c"
 
 [ -x "$INSTALL/lib/wine/x86_64-unix/wine" ] || { echo "no Wine build, run build-wine.sh" >&2; exit 1; }
 [ -n "${STEPOVER_D3DMETAL_ARCHIVE:-}" ] || [ -f "$GPTK_DMG" ] || { echo "no Game Porting Toolkit disk image at $GPTK_DMG" >&2; exit 1; }
@@ -33,7 +35,7 @@ cp -a "$DEPS"/lib/*.dylib "$STAGE/lib/"
 echo "== compat plug-in"
 clang -arch x86_64 -shared -O2 -Wall -mmacosx-version-min="$MACOSX_DEPLOYMENT_TARGET" \
     -I"$SOURCES/sources/wine/include" -DWINE_UNIX_LIB \
-    -o "$STAGE/lib/wine/x86_64-unix/cxcompatdb.so" "$SRC_ROOT/compat/stepovercompat.c" \
+    -o "$STAGE/lib/wine/x86_64-unix/cxcompatdb.so" "$COMPAT_SRC" \
     "$STAGE/lib/wine/x86_64-unix/ntdll.so" -Wl,-rpath,@loader_path -install_name @rpath/cxcompatdb.so
 
 echo "== D3DMetal"
@@ -147,6 +149,7 @@ fi
 cat > "$STAGE/VERSION" <<EOF
 name=$RUNTIME_NAME
 build=$RUNTIME_BUILD
+compat_format=$(sed -n 's/^#define STEPOVER_COMPAT_FORMAT \([0-9][0-9]*\).*/\1/p' "$COMPAT_SRC")
 wine=$(cat "$SOURCES/sources/wine/VERSION")
 crossover_sources=$CX_VERSION
 d3dmetal=$D3DM_VERSION

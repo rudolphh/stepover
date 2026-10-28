@@ -152,10 +152,14 @@ public struct BottleConfig: Codable, Sendable {
         }
     }
 
+    /// The stepover-compat.conf format this app writes (STEPOVER_COMPAT_FORMAT in compat/stepovercompat.c).
+    public static let compatFormat = 3
+
     /// The text of stepover-compat.conf, which the compat plug-in reads in every Wine process.
     /// Layers, lowest first: built-in fixes, matched community fixes, programs, the bottle's rules.
     public func compatConf(fixes: [MatchedFix] = []) -> String {
-        var out = "# Written by Stepover from stepover.json; edit that file (or use the app) instead.\n\n[*]\nbackend = \(graphics.rawValue)\n"
+        var out = "# Written by Stepover from stepover.json; edit that file (or use the app) instead.\n\n"
+            + "version = \(Self.compatFormat)\n\n[*]\nbackend = \(graphics.rawValue)\n"
         var sections: [String: Section] = [:]
         for fix in builtInFixes ? BuiltInFixes.all : [] {
             sections[fix.exe.asciiLowercased, default: Section()].layer(backend: fix.rule.graphics, env: fix.rule.env, args: fix.rule.args)

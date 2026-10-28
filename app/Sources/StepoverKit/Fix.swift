@@ -11,6 +11,13 @@ public struct MatchedFix: Hashable, Sendable {
     public init(fix: Fix, programs: [String], argPrograms: [String]) {
         self.fix = fix; self.programs = programs; self.argPrograms = argPrograms
     }
+
+    /// The compat format a runtime's plug-in needs to apply all of this fix (BottleConfig.compatFormat):
+    /// 3 for DLL overrides or a section named by a full path (Steam games), 2 for launch arguments, else 1.
+    public var neededCompatFormat: Int {
+        if !fix.dlls.isEmpty || programs.contains(where: { $0.contains("\\") }) { return 3 }
+        return fix.args.isEmpty ? 1 : 2
+    }
 }
 
 /// A per-game fix: settings Stepover applies when the game runs. Data only; the format and the

@@ -207,4 +207,25 @@ final class FixTests: XCTestCase {
         XCTAssertEqual(Fix.wineOverride("dcomp", "disabled"), "dcomp=")
         XCTAssertEqual(Fix.wineOverride("x", "builtin"), "x=b")
     }
+
+    func testCompatConfStartsWithVersion() {
+        XCTAssertTrue(BottleConfig().compatConf().hasPrefix(
+            "# Written by Stepover from stepover.json; edit that file (or use the app) instead.\n\nversion = 3\n\n[*]\n"))
+    }
+
+    func testNeededCompatFormat() {
+        var withDlls = Fix(name: "A", match: .init(exe: ["a.exe"]))
+        withDlls.dlls = ["d3d9": "native"]
+        XCTAssertEqual(MatchedFix(fix: withDlls, programs: ["a.exe"], argPrograms: []).neededCompatFormat, 3)
+        let bySteamPath = Fix(name: "B", match: .init(steam: [1]))
+        XCTAssertEqual(MatchedFix(fix: bySteamPath, programs: [#"c:\program files (x86)\steam\steamapps\common\b\b.exe"#],
+                                  argPrograms: []).neededCompatFormat, 3)
+        var withArgs = Fix(name: "C", match: .init(exe: ["c.exe"]))
+        withArgs.args = ["-dx12"]
+        XCTAssertEqual(MatchedFix(fix: withArgs, programs: ["c.exe"], argPrograms: ["c.exe"]).neededCompatFormat, 2)
+        var envOnly = Fix(name: "D", match: .init(exe: ["d.exe"]))
+        envOnly.env = ["X": "1"]
+        envOnly.graphics = "dxmt"
+        XCTAssertEqual(MatchedFix(fix: envOnly, programs: ["d.exe"], argPrograms: []).neededCompatFormat, 1)
+    }
 }

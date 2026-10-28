@@ -221,6 +221,13 @@ struct BottleView: View {
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Fixes come from the official list, sources you add and your own fixes folder (Fixes menu). Each game gets one fix, and yours wins. Components and registry values install the next time Stepover starts a program here.")
+                    if let runtime = bottle.runtime(config), let format = runtime.compatFormat, config.fixes {
+                        let disabled = Set(config.disabledFixes)
+                        ForEach((store.fixCandidates[bottle.id] ?? []).filter { !disabled.contains($0.fix.id) && $0.neededCompatFormat > format },
+                                id: \.fix.id) { matched in
+                            Text("\(runtime.name) can't apply all of \(matched.fix.name); pick a newer Wine version.")
+                        }
+                    }
                     if !store.fixNotes.isEmpty {
                         Text("\(store.fixNotes.count) fix item(s) were skipped or left out for safety; `stepover fixes` lists them.")
                             .help(store.fixNotes.prefix(20).joined(separator: "\n"))

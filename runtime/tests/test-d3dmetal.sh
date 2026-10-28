@@ -16,6 +16,7 @@ assert_eq "0" "$status" "installs with D3DMetal from $(basename "$(dirname "$ARC
 assert_eq "" "$(diff -r "$tmp/runtimes/cx26.3/lib/d3dmetal" "$INSTALLED/lib/d3dmetal" 2>&1)" "same D3DMetal as the installed runtime"
 assert_eq "" "$(diff -r "$tmp/runtimes/cx26.3/licenses/d3dmetal" "$INSTALLED/licenses/d3dmetal" 2>&1)" "same D3DMetal licenses"
 assert_eq "yes" "$(grep -q '^d3dmetal=[0-9]' "$tmp/runtimes/cx26.3/VERSION" 2>/dev/null && echo yes || echo no)" "VERSION names the D3DMetal version"
+assert_eq "yes" "$(grep -q '^compat_format=3$' "$tmp/runtimes/cx26.3/VERSION" 2>/dev/null && echo yes || echo no)" "VERSION records the compat format"
 
 # Review Focus 3: a broken archive fails the install instead of producing a runtime without D3DMetal.
 printf x > "$tmp/broken.tar.xz"

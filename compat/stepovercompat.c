@@ -40,6 +40,11 @@
 #include "windef.h"
 #include "winternl.h"
 
+/* The stepover-compat.conf features this plug-in reads; install-runtime.sh records it in the runtime's VERSION
+ * so an app can tell what an older runtime can't apply. 1: backend, env (0.1.0); 2: args (0.1.2); 3: dll and
+ * sections named by a full path (0.2.0). Lines it doesn't know, like the app's "version =", are ignored. */
+#define STEPOVER_COMPAT_FORMAT 3
+
 extern void prepend_dll_path( const char *path );  /* exported by CrossOver's ntdll.so */
 extern void add_load_order_override( const WCHAR *entry );  /* WINEDLLOVERRIDES syntax; ntdll copies it */
 

@@ -22,6 +22,10 @@ public struct Runtime: Hashable, Sendable {
         return out
     }
 
+    /// The stepover-compat.conf format its plug-in reads (VERSION's compat_format); nil for runtimes built
+    /// before it was recorded, which count as new enough.
+    public var compatFormat: Int? { info["compat_format"].flatMap { Int($0) } }
+
     public var summary: String {
         let i = info
         var text = "\(i["wine"] ?? name), D3DMetal \(i["d3dmetal"] ?? "?"), DXMT \(i["dxmt"] ?? "?")"
