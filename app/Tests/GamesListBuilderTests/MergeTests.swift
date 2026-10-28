@@ -164,6 +164,24 @@ final class MergeTests: XCTestCase {
         XCTAssertEqual(games.first?.antiCheat?.names, ["VAC"])
     }
 
+    // Found in the Library look: Hi-Fi Rush's wiki page records no Steam id, so its "perfect" sat apart from
+    // the Steam game the fix list knows. A unique exact name joins them; a wiki sibling title blocks it.
+    func testWikiOnlyPageJoinsTheSameNamedSteamGame() {
+        let wiki = AGWPage(title: "HI-Fi RUSH", steam: nil, tests: MacTests(crossover: MacTest(rating: .perfect)))
+        let fix = Fix(name: "Hi-Fi RUSH", match: .init(steam: [1817230], exe: ["Hi-Fi-RUSH.exe"]))
+        let games = Merge.entries(BuildSources(agw: [wiki], antiCheat: [], fixes: [fix], mostPlayed: nil), previous: nil)
+        XCTAssertEqual(games.map(\.id), ["steam:1817230"])
+        XCTAssertEqual(games.first?.mac?.crossover?.rating, .perfect)
+        XCTAssertEqual(games.first?.agwPage, "HI-Fi RUSH")
+
+        let classic = AGWPage(title: "Star Wars: Battlefront II", steam: nil, tests: MacTests(crossover: MacTest(rating: .playable)))
+        let modern = AGWPage(title: "Star Wars Battlefront II (2017)", steam: nil, tests: MacTests(crossover: MacTest(rating: .runs)))
+        let charted = Merge.entries(BuildSources(agw: [classic, modern], antiCheat: [], fixes: [], mostPlayed: [1237950]),
+                                    previous: list([GameEntry(id: "steam:1237950", name: "Star Wars Battlefront II", steam: 1237950,
+                                                              store: StoreFacts(macVersion: false, singlePlayer: true, controller: .full, checked: "2026-10-28"))]))
+        XCTAssertNil(charted.first { $0.id == "steam:1237950" }?.mac)   // siblings on the wiki: no guessing
+    }
+
     // Review I6: names from earlier runs don't stick when every source worked.
     func testOldAliasesExpire() {
         let facts = StoreFacts(macVersion: false, singlePlayer: true, controller: .full, checked: "2026-10-28")

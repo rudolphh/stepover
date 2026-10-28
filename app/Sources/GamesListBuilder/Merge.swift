@@ -95,7 +95,7 @@ public enum Merge {
         let charted = Set(sources.mostPlayed ?? [])
         for id in charted { edit("steam:\(id)", steam: id) { _ in } }
 
-        return games.values.compactMap { game -> GameEntry? in
+        let merged = games.values.compactMap { game -> GameEntry? in
             var game = game
             let known = game.agwPage != nil || game.antiCheat != nil || game.fix || game.store != nil || game.deck != nil
                 || game.steam.map(charted.contains) == true
@@ -108,19 +108,41 @@ public enum Merge {
             var seen: Set<String> = [GameName.normalized(game.name)]
             game.names = (sourced + carried).filter { !$0.isEmpty && seen.insert(GameName.normalized($0)).inserted }
             return game
-        }.sorted { $0.id < $1.id }
+        }
+        return joinByName(merged.sorted { $0.id < $1.id })
+    }
+
+    /// Wiki-only games moved onto the one Steam game of exactly the same name (editions kept), unless another
+    /// wiki title shares that name once a "(2017)"-style year is dropped. Free, before any Steam search.
+    static func joinByName(_ entries: [GameEntry]) -> [GameEntry] {
+        let shared = siblingTitles(entries)
+        var out = entries
+        for wiki in entries where wiki.steam == nil && wiki.agwPage.map({ !shared.contains(wikiBase($0)) }) == true {
+            let key = GameName.normalized(wiki.name, dropEdition: false)
+            let same = out.filter { game in
+                game.steam != nil && ([game.name] + game.names).contains { GameName.normalized($0, dropEdition: false) == key }
+            }
+            if same.count == 1, let steam = same[0].steam { out = resolve(out, id: wiki.id, steam: steam) }
+        }
+        return out
+    }
+
+    /// A wiki title without a trailing "(2017)"-style part, normalized with editions kept.
+    static func wikiBase(_ title: String) -> String {
+        GameName.normalized(title.replacingOccurrences(of: #"\s*\([^)]*\)\s*$"#, with: "", options: .regularExpression), dropEdition: false)
+    }
+
+    /// Wiki titles that name two games ("Star Wars: Battlefront II" and "Star Wars Battlefront II (2017)").
+    static func siblingTitles(_ entries: [GameEntry]) -> Set<String> {
+        Set(Dictionary(grouping: entries.compactMap(\.agwPage), by: wikiBase).filter { $0.value.count > 1 }.keys)
     }
 
     /// Wiki-only games (no Steam app id yet) to look up by name on Steam: never searched first, then those
     /// last searched more than `maxAge` days ago.
     public static func steamToSearch(_ entries: [GameEntry], today: String, maxAge: Int = 30, limit: Int) -> [String] {
-        // a title another wiki page shares once "(2017)"-style years are dropped ("Star Wars: Battlefront II" and
-        // "Star Wars Battlefront II (2017)") names two games; the search can't tell which Steam game is which
-        func base(_ title: String) -> String {
-            GameName.normalized(title.replacingOccurrences(of: #"\s*\([^)]*\)\s*$"#, with: "", options: .regularExpression), dropEdition: false)
-        }
-        let shared = Set(Dictionary(grouping: entries.compactMap(\.agwPage), by: base).filter { $0.value.count > 1 }.keys)
-        let due = entries.filter { $0.steam == nil && $0.agwPage != nil && !shared.contains(base($0.agwPage!)) }
+        // a title another wiki page shares (siblingTitles) names two games; the search can't tell which is which
+        let shared = siblingTitles(entries)
+        let due = entries.filter { $0.steam == nil && $0.agwPage != nil && !shared.contains(wikiBase($0.agwPage!)) }
             .filter { game in game.steamSearched.map { days(from: $0, to: today) > maxAge } ?? true }
         let never = due.filter { $0.steamSearched == nil }
         let stale = due.filter { $0.steamSearched != nil }.sorted { $0.steamSearched! < $1.steamSearched! }
