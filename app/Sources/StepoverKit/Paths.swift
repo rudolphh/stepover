@@ -17,6 +17,9 @@ public enum Paths {
             .flatMap { $0.isEmpty ? nil : $0 } ?? "rudolphh/stepover"
     }
 
+    /// The app's version (CFBundleShortVersionString); nil for a development build outside Stepover.app.
+    public static var appVersion: String? { appBundle?.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String }
+
     /// STEPOVER_HOME, default ~/Library/Application Support/Stepover
     public static var root: URL {
         url("STEPOVER_HOME", default: home.appendingPathComponent("Library/Application Support/Stepover"))

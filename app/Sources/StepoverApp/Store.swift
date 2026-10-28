@@ -14,21 +14,21 @@ final class Store: ObservableObject {
     @Published var display: [String: (highRes: Bool, dpi: Int)] = [:]
     @Published var runtimeReady = !Runtime.installed().isEmpty
     @Published var runtimeProgress: Double?
-    /// The bundled manifest names a newer download than the installed runtime came from.
-    @Published var runtimeUpdate = false
     @Published var hasCrossOver = !Importer.crossOverBottles().isEmpty
     /// Fixes matching each bottle, including ones turned off there (the toggles show which).
     @Published var fixCandidates: [String: [MatchedFix]] = [:]
     @Published var showFixSources = false
     /// Fixes skipped as invalid and flagged items left out, from the last load.
     @Published var fixNotes: [String] = []
-    let manifest = RuntimeManifest.bundled()
+    /// The runtime list (cached copy, else the runtime this app was built with); refreshed from GitHub at launch.
+    @Published var index = RuntimeIndex.load()
     private var icons: [String: NSImage] = [:]
     private var timer: Timer?
 
     init() {
         reload()
         Task { _ = await FixLibrary.update(); refreshFixes() }  // quietly; offline just keeps the last copy
+        Task { if await RuntimeIndex.fetch() { index = RuntimeIndex.load() } }
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refreshRunning() }
         }
@@ -36,11 +36,20 @@ final class Store: ObservableObject {
 
     var selected: Bottle? { bottles.first { $0.id == selection } }
 
+    /// The runtime a first install downloads.
+    var manifest: RuntimeManifest? { index.current }
+
+    /// A new runtime to offer, never while a game is running.
+    var runtimeUpdate: RuntimeManifest? {
+        guard runtimeReady, running.isEmpty else { return nil }
+        return RuntimeInstaller.offered(index: index, installed: Runtime.installed().map(\.name), appVersion: Paths.appVersion)
+    }
+
     func reload() {
         bottles = Bottle.all()
         configs = Dictionary(uniqueKeysWithValues: bottles.map { ($0.id, $0.loadConfig()) })
         display = Dictionary(uniqueKeysWithValues: bottles.map { ($0.id, ($0.highResolution, $0.dpi)) })
-        runtimeUpdate = manifest.map { $0.isInstalled && !$0.isCurrent } ?? false
+        index = RuntimeIndex.load()
         if selection == nil || !bottles.contains(where: { $0.id == selection }) { selection = bottles.first?.id }
         refreshRunning()
         refreshFixes()
@@ -162,11 +171,11 @@ final class Store: ObservableObject {
     }
 
     func installRuntime() {
-        guard let manifest, runtimeProgress == nil else { return }
+        guard let target = runtimeReady ? runtimeUpdate : manifest, runtimeProgress == nil else { return }
         runtimeProgress = 0
         Task {
             do {
-                _ = try await RuntimeInstaller.install(manifest) { fraction in
+                _ = try await RuntimeInstaller.install(target) { fraction in
                     Task { @MainActor in self.runtimeProgress = fraction }
                 }
                 runtimeReady = true

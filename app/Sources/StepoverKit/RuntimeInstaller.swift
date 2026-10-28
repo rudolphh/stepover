@@ -28,6 +28,26 @@ public struct RuntimeManifest: Codable, Sendable {
         return manifest
     }
 
+    /// Whether an app of this version can use the runtime (`minApp`); a development build (no version) can use any.
+    public func supports(appVersion: String?) -> Bool {
+        guard let minApp, let appVersion else { return true }
+        return Self.version(appVersion, atLeast: minApp)
+    }
+
+    /// Free space a download needs: the archive, the unpacked runtime (about four times the archive) and a margin.
+    public var neededBytes: Int64 { size * 5 + 512 * 1_048_576 }
+
+    /// Dot-separated numbers compared in order; anything after a "-" is ignored (0.10.0 is newer than 0.9.1).
+    static func version(_ version: String, atLeast minimum: String) -> Bool {
+        func numbers(_ s: String) -> [Int] { (s.split(separator: "-").first ?? "").split(separator: ".").map { Int($0) ?? 0 } }
+        let a = numbers(version), b = numbers(minimum)
+        for i in 0..<max(a.count, b.count) {
+            let x = i < a.count ? a[i] : 0, y = i < b.count ? b[i] : 0
+            if x != y { return x > y }
+        }
+        return true
+    }
+
     /// Installed and complete (has bin/wine)?
     public var isInstalled: Bool { Runtime.installed().contains { $0.name == name } }
 
@@ -52,14 +72,29 @@ public enum RuntimeInstaller {
         try JSONEncoder().encode(manifest).write(to: runtime.url.appendingPathComponent(recordName))
     }
 
+    /// The runtime to offer: the list's current one, when this app can use it and it isn't installed. A new
+    /// name installs next to the others, so nothing that's installed is ever replaced by an offer.
+    public static func offered(index: RuntimeIndex, installed: [String], appVersion: String?) -> RuntimeManifest? {
+        guard let current = index.current, !index.pulled.contains(current.name),
+              current.supports(appVersion: appVersion), !installed.contains(current.name) else { return nil }
+        return current
+    }
+
     /// Downloads (or copies, for file:// URLs and plain paths), verifies and unpacks a runtime.
     /// `progress` gets values from 0 to 1 while downloading. Replacing a runtime under running
     /// Wine processes could crash them, so this refuses while any bottle is running, both before
-    /// the download (quick answer) and right before the swap (a game may have started meanwhile).
-    public static func install(_ manifest: RuntimeManifest, progress: (@Sendable (Double) -> Void)? = nil) async throws -> Runtime {
+    /// the download (quick answer) and right before the swap (a game may have started meanwhile). A runtime
+    /// with a new name installs next to the others and touches nothing else.
+    public static func install(_ manifest: RuntimeManifest, into runtimes: URL = Paths.runtimes,
+                               progress: (@Sendable (Double) -> Void)? = nil) async throws -> Runtime {
         let fm = FileManager.default
-        try ensureNothingRunning(manifest)
-        let work = Paths.root.appendingPathComponent(".download")
+        try ensureNothingRunning(manifest, in: runtimes)
+        try fm.createDirectory(at: runtimes, withIntermediateDirectories: true)
+        if let free = try? runtimes.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+            .volumeAvailableCapacityForImportantUsage, free < manifest.neededBytes {
+            throw StepoverError.message("not enough disk space: the runtime needs about \(String(format: "%.1f", Double(manifest.neededBytes) / 1e9)) GB free")
+        }
+        let work = runtimes.appendingPathComponent(".download")
         try fm.createDirectory(at: work, withIntermediateDirectories: true)
         let archive = work.appendingPathComponent("\(manifest.name).tar.xz")
         try? fm.removeItem(at: archive)
@@ -76,8 +111,7 @@ public enum RuntimeInstaller {
             try? fm.removeItem(at: archive)
             throw StepoverError.message("the runtime download did not match its checksum; try again")
         }
-        try fm.createDirectory(at: Paths.runtimes, withIntermediateDirectories: true)
-        let staging = Paths.runtimes.appendingPathComponent(".unpack-\(manifest.name)")
+        let staging = runtimes.appendingPathComponent(".unpack-\(manifest.name)")
         try? fm.removeItem(at: staging)
         try fm.createDirectory(at: staging, withIntermediateDirectories: true)
         let tar = Process()
@@ -87,13 +121,13 @@ public enum RuntimeInstaller {
         guard tar.terminationStatus == 0 else { throw StepoverError.message("unpacking the runtime failed (tar exit \(tar.terminationStatus))") }
 
         let unpacked = staging.appendingPathComponent(manifest.name)
-        let dest = Paths.runtimes.appendingPathComponent(manifest.name)
+        let dest = runtimes.appendingPathComponent(manifest.name)
         guard fm.isExecutableFile(atPath: unpacked.appendingPathComponent("bin/wine").path) else {
             throw StepoverError.message("the runtime archive has no \(manifest.name)/bin/wine")
         }
-        try ensureNothingRunning(manifest)
+        try ensureNothingRunning(manifest, in: runtimes)
         if fm.fileExists(atPath: dest.path) {
-            let old = Paths.runtimes.appendingPathComponent("\(manifest.name).old")
+            let old = runtimes.appendingPathComponent("\(manifest.name).old")
             try? fm.removeItem(at: old)
             try fm.moveItem(at: dest, to: old)
         }
@@ -109,8 +143,9 @@ public enum RuntimeInstaller {
         return Runtime(url: dest)
     }
 
-    static func ensureNothingRunning(_ manifest: RuntimeManifest) throws {
-        if manifest.isInstalled, let busy = Bottle.all().first(where: \.isRunning) {
+    static func ensureNothingRunning(_ manifest: RuntimeManifest, in runtimes: URL) throws {
+        let installed = FileManager.default.isExecutableFile(atPath: runtimes.appendingPathComponent("\(manifest.name)/bin/wine").path)
+        if installed, let busy = Bottle.all().first(where: \.isRunning) {
             throw StepoverError.message("quit everything running in \(busy.name) first; the runtime can't be replaced while it's in use")
         }
     }

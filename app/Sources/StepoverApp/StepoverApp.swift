@@ -61,16 +61,16 @@ struct ContentView: View {
                         .tag(bottle.id)
                     }
                 }
-                if store.runtimeUpdate, let manifest = store.manifest {
+                if let update = store.runtimeUpdate {
                     Section("Wine Runtime") {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Update available").font(.headline)
-                            Text("A \(ByteCountFormatter.string(fromByteCount: manifest.size, countStyle: .file)) download. Quit running games first.")
+                            Text("Wine runtime \(update.name) is available").font(.headline)
+                            Text("A \(ByteCountFormatter.string(fromByteCount: update.size, countStyle: .file)) download, installed next to the one you have. Bottles set to Newest use it; you can pick another Wine version for any bottle.")
                                 .font(.caption).foregroundStyle(.secondary)
                             if let progress = store.runtimeProgress {
                                 ProgressView(value: progress)
                             } else {
-                                Button("Update Runtime") { store.installRuntime() }
+                                Button("Download") { store.installRuntime() }
                             }
                         }
                         .padding(.vertical, 4)

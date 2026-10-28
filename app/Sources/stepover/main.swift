@@ -29,7 +29,7 @@ usage: stepover <command> ...
   fixes share <bottle> <program>        open GitHub with that fix filled in, to propose it
   fixes folder                          where your own fixes go (applied as written)
   components                            list the common ones
-  runtime [status|install [--from <file or URL>]]
+  runtime [status|install [<name>] [--from <file or URL>]]
                                         the Wine runtime the app downloads on first launch
   runtimes                              installed Wine runtimes
 
@@ -181,16 +181,35 @@ do {
 
     case "runtime":
         let sub = args.first ?? "status"
-        guard var manifest = RuntimeManifest.bundled() else {
-            fail("this build has no runtime.json (set STEPOVER_RUNTIME_MANIFEST)")
-        }
+        let refreshed = DispatchSemaphore(value: 0)
+        Task.detached { _ = await RuntimeIndex.fetch(); refreshed.signal() }  // offline keeps the cached list
+        refreshed.wait()
+        let index = RuntimeIndex.load()
+        let installed = Runtime.installed().map(\.name)
         switch sub {
         case "status":
-            let state = manifest.isCurrent ? "installed, up to date"
-                : manifest.isInstalled ? "installed, update available (stepover runtime install)" : "not installed"
-            print("\(manifest.name): \(state) (\(manifest.size / 1_000_000) MB download from \(manifest.url))")
+            if index.runtimes.isEmpty { fail("no runtime list (this build has none bundled; set STEPOVER_RUNTIME_INDEX)") }
+            for entry in index.runtimes {
+                var line = "\(entry.name): \((entry.status ?? .current).rawValue), \(installed.contains(entry.name) ? "installed" : "not installed")"
+                if let note = entry.note { line += " (\(note))" }
+                print(line)
+            }
         case "install":
-            if let i = args.firstIndex(of: "--from"), i + 1 < args.count { manifest.url = args[i + 1] }
+            var rest = Array(args.dropFirst())
+            var from: String?
+            if let i = rest.firstIndex(of: "--from"), i + 1 < rest.count { from = rest[i + 1]; rest.removeSubrange(i...(i + 1)) }
+            var manifest: RuntimeManifest
+            if let name = rest.first {
+                guard let entry = index.runtimes.first(where: { $0.name == name }) else { fail("\(name) isn't in the runtime list") }
+                manifest = entry
+            } else if let entry = RuntimeInstaller.offered(index: index, installed: installed, appVersion: Paths.appVersion)
+                        ?? (installed.isEmpty ? index.current : nil) {
+                manifest = entry
+            } else {
+                print("nothing new to install (installed: \(installed.joined(separator: ", ")))")
+                exit(0)
+            }
+            if let from { manifest.url = from }
             let semaphore = DispatchSemaphore(value: 0)
             var outcome: Result<Runtime, Error> = .failure(StepoverError.message("not started"))
             Task.detached {
@@ -206,7 +225,7 @@ do {
             FileHandle.standardError.write(Data("\n".utf8))
             print("installed \(try outcome.get().summary)")
         default:
-            fail("runtime status | runtime install [--from <file or URL>]")
+            fail("runtime status | runtime install [<name>] [--from <file or URL>]")
         }
 
     case "install":
