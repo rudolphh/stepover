@@ -1,6 +1,7 @@
 import AppKit
-import StepoverKit
 import Foundation
+import GameController
+import StepoverKit
 
 /// App state: bottles, their stepover.json, and what is running. Wine work runs off the main thread.
 @MainActor
@@ -26,10 +27,45 @@ final class Store: ObservableObject {
     private var icons: [String: NSImage] = [:]
     private var timer: Timer?
 
+    // MARK: Library
+    /// The Library's tiles, rebuilt by reload() and when a newer games list arrives.
+    @Published var library: [LibraryGame] = []
+    @Published var hidden = Set(LibraryState.load().hidden)
+    @Published var showHidden = false
+    /// View > Bottles: today's bottle pages instead of the Library (remembered).
+    @Published var showBottles = UserDefaults.standard.bool(forKey: "showBottles") {
+        didSet { UserDefaults.standard.set(showBottles, forKey: "showBottles") }
+    }
+    /// Cover art by Steam app id, filled in as downloads land.
+    @Published var art: [Int: NSImage] = [:]
+    /// The first connected game controller's name, nil when none.
+    @Published var controllerName: String?
+    /// The first runtime download failed; the toolbar offers Retry instead of an alert.
+    @Published var runtimeFailed = false
+    private var gamesList: GamesList
+    private var gameIndex: GameIndex
+    private var artRequested: Set<Int> = []
+    var gamesCredits: [String] { gamesList.credits }
+
     init() {
+        let list = GamesList.load()
+        gamesList = list
+        gameIndex = GameIndex(list)
         reload()
         Task { _ = await FixLibrary.update(); refreshFixes() }  // quietly; offline just keeps the last copy
         refreshIndex()
+        if GamesList.needsRefresh() {   // at most once a day; offline keeps the cached or bundled list
+            Task {
+                if await GamesList.fetch() {
+                    gamesList = GamesList.load()
+                    gameIndex = GameIndex(gamesList)
+                    rebuildLibrary()
+                }
+            }
+        }
+        watchControllers()
+        // a first launch starts the one download games need by itself (spec: Wine runtime, in plain words)
+        if !runtimeReady && manifest != nil { installRuntime() }
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refreshRunning() }
         }
@@ -92,6 +128,64 @@ final class Store: ObservableObject {
         if selection == nil || !bottles.contains(where: { $0.id == selection }) { selection = bottles.first?.id }
         refreshRunning()
         refreshFixes()
+        rebuildLibrary()
+    }
+
+    func rebuildLibrary() {
+        library = Library.games(bottles: bottles.map { (bottle: $0, config: config($0)) },
+                                steamApps: { SteamLibrary.apps(in: $0) }, index: gameIndex, recent: RecentGames.load())
+        loadArt()
+    }
+
+    /// Cached covers at once; the rest downloaded four at a time.
+    private func loadArt() {
+        let wanted = Set(library.compactMap(\.steamAppID)).subtracting(artRequested)
+        artRequested.formUnion(wanted)
+        var missing: [Int] = []
+        for id in wanted.sorted() {
+            if let file = GameArt.cached(id), let image = NSImage(contentsOf: file) { art[id] = image } else { missing.append(id) }
+        }
+        guard !missing.isEmpty else { return }
+        Task {
+            for start in stride(from: 0, to: missing.count, by: 4) {
+                let chunk = missing[start..<min(start + 4, missing.count)]
+                let landed = await withTaskGroup(of: (Int, URL?).self) { group -> [(Int, URL)] in
+                    for id in chunk { group.addTask { (id, await GameArt.fetch(id)) } }
+                    var out: [(Int, URL)] = []
+                    for await (id, url) in group { if let url { out.append((id, url)) } }
+                    return out
+                }
+                for (id, url) in landed { if let image = NSImage(contentsOf: url) { art[id] = image } }
+            }
+        }
+    }
+
+    func playGame(_ game: LibraryGame) {
+        work(nil, "Starting \(game.name)", { try Launcher.run(game.launch, in: game.bottle) }, then: { self.rebuildLibrary() })
+    }
+
+    func setHidden(_ game: LibraryGame, _ hide: Bool) {
+        if hide { hidden.insert(game.id) } else { hidden.remove(game.id) }
+        do { try LibraryState(hidden: hidden.sorted()).save() } catch { alert = error.localizedDescription }
+    }
+
+    /// Settings on a tile: the game's bottle page.
+    func openSettings(_ game: LibraryGame) {
+        selection = game.bottle.id
+        showBottles = true
+    }
+
+    private func watchControllers() {
+        updateController()
+        for name in [Notification.Name.GCControllerDidConnect, .GCControllerDidDisconnect] {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.updateController() }
+            }
+        }
+    }
+
+    private func updateController() {
+        controllerName = GCController.controllers().first.map { $0.vendorName ?? "Game controller" }
     }
 
     func refreshFixes() {
@@ -211,7 +305,9 @@ final class Store: ObservableObject {
 
     func installRuntime() {
         guard let target = runtimeReady ? runtimeUpdate : manifest, runtimeProgress == nil else { return }
+        let first = !runtimeReady
         runtimeProgress = 0
+        runtimeFailed = false
         Task {
             do {
                 _ = try await RuntimeInstaller.install(target) { fraction in
@@ -219,7 +315,8 @@ final class Store: ObservableObject {
                 }
                 runtimeReady = true
             } catch {
-                alert = "Installing the Wine runtime failed: \(error.localizedDescription)"
+                // the first download says so in the Library's toolbar, with Retry; later ones keep the alert
+                if first { runtimeFailed = true } else { alert = "Installing the Wine runtime failed: \(error.localizedDescription)" }
             }
             runtimeProgress = nil
             reload()
