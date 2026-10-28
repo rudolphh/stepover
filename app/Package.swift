@@ -10,5 +10,9 @@ let package = Package(
         // "StepoverApp", not "Stepover": the file system is case-insensitive and "stepover" is taken
         .executableTarget(name: "StepoverApp", dependencies: ["StepoverKit"]),
         .testTarget(name: "StepoverKitTests", dependencies: ["StepoverKit"]),
+        // builds the games list (games.json) for the Games list workflow
+        .target(name: "GamesListBuilder", dependencies: ["StepoverKit"]),
+        .executableTarget(name: "games-list", dependencies: ["GamesListBuilder"]),
+        .testTarget(name: "GamesListBuilderTests", dependencies: ["GamesListBuilder"]),
     ]
 )
