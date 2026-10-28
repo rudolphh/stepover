@@ -2,8 +2,12 @@
 # Builds CodeWeavers' DXVK (1.10.3, from the CrossOver source drop) for 32- and 64-bit Windows
 # with mingw-w64, into $BUILD/dxvk-install/{i386,x86_64}-windows. The DLLs get Wine's builtin
 # marker (as CrossOver's do) so Wine loads them from the runtime's lib/dxvk folder.
+#
+# Usage: build-dxvk.sh          apply Stepover's patches and build
+#        build-dxvk.sh patch    only apply the patches
 set -euo pipefail
-source "$(dirname "$0")/config.sh"
+HERE="$(cd "$(dirname "$0")" && pwd)"   # absolute: patch -d changes folder before reading the patch
+source "$HERE/config.sh"
 
 export PATH="$BREW_PREFIX/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 SRC="$SOURCES/sources/dxvk"
@@ -11,10 +15,11 @@ OUT="$BUILD/dxvk-install"
 if [ ! -f "$SRC/meson.build" ]; then
     tar -xzf "$DL/crossover-sources-${CX_VERSION}.tar.gz" -C "$SOURCES" sources/dxvk
 fi
-for p in "$(dirname "$0")"/patches/dxvk/*.patch; do   # -N: already applied is fine
+for p in "$HERE"/patches/dxvk/*.patch; do   # -N: already applied is fine
     patch -d "$SRC" -p1 -N -s -i "$p" || true
 done
 grep -q 'Stepover build fix' "$SRC/src/d3d9/d3d9_include.h" || { echo "dxvk patches did not apply" >&2; exit 1; }
+[ "${1:-}" != patch ] || exit 0
 rm -rf "$OUT"
 # DXVK 1.10.3 predates GCC 13, whose C++ library stopped including <cstdint> indirectly.
 for arch in 64 32; do
