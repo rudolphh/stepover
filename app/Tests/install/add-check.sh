@@ -38,6 +38,8 @@ says() { print -r -- "$out" | grep -qF -- "$1"; }
 bottle_count() { print -l "$bottles"/*(N/) | wc -l | tr -d ' '; }
 in_log() { grep -qF -- "$2" "$STEPOVER_LOGS/$1.log"; }
 is_folder() { [[ -d $1 && ! -L $1 ]]; }
+not_running() { ! "$cli" list | grep -qF "$1  [running]"; }
+not_in_log() { ! in_log "$1" "$2"; }
 
 # 1. Inno Setup, data in setup-1.bin, a redistributable step that hangs
 game="$fixtures/Tiny.Game.v1.0.2-GROUP"
@@ -97,6 +99,13 @@ check "no bottles for those" test "$(bottle_count)" = "$count"
 add "$fixtures/tiny.iso"
 check "disk image: added" program_is "tiny" 'C:\\Games\\tiny\\TinyNsisGame.exe'
 check "disk image: ejected" test -z "$(hdiutil info | grep -F stepover-)"
+
+# 8. a new bottle's first Wine session has ended once it's made: a command started while it winds down boots the bottle
+#    again inside it, and each service of that second boot waits ~40 s (MountMgr, PlugPlay)
+out=$("$cli" create "Fresh Bottle" 2>&1); st=$?
+check "create: exit 0" test $st -eq 0
+check "create returns once the new bottle's Wine has ended" not_running "Fresh Bottle"
+check "create: the wait didn't run out" not_in_log "Fresh Bottle" "still running after a minute"
 
 print "$passed/$total passed"
 [[ $passed -eq $total ]]

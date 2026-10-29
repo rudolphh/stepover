@@ -102,7 +102,8 @@ public enum Importer {
         return out
     }
 
-    /// A new, empty 64-bit bottle (Windows 10, MSync on, D3DMetal by default).
+    /// A new, empty 64-bit bottle (Windows 10, MSync on, D3DMetal by default). Returns once its first Wine session has
+    /// ended (within a minute), so the next command doesn't boot it a second time.
     @discardableResult
     public static func create(_ name: String, extraEnv: [String: String] = [:]) throws -> Bottle {
         let dest = Paths.bottles.appendingPathComponent(name)
@@ -112,6 +113,11 @@ public enum Importer {
         try bottle.save(BottleConfig(graphics: .d3dmetal, env: ["WINEMSYNC": "1"], origin: "created by Stepover"))
         let status = try Launcher.wine(["wineboot", "--init"], bottle: bottle, extraEnv: extraEnv, wait: true)
         guard status == 0 else { throw StepoverError.message("wineboot exited with \(status); see \(bottle.logURL.path)") }
+        // wineboot returns while the new bottle's services are still winding down (~7 s); a command started then boots
+        // the bottle again inside that session, and each service of the second boot waits ~40 s (MountMgr, PlugPlay).
+        // Something that never ends doesn't hold the bottle up past a minute.
+        for _ in 0..<240 where bottle.isRunning { Thread.sleep(forTimeInterval: 0.25) }
+        if bottle.isRunning { Launcher.appendLog(bottle, "the new bottle's first Wine session was still running after a minute") }
         return bottle
     }
 }
