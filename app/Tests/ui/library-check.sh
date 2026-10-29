@@ -47,7 +47,12 @@ names=(${(f)"$(for c in "$home"/Bottles/*/stepover.json; do /usr/bin/python3 -I 
 launch "$home"
 dump=$("$AX" "$pid")
 check "the window is the Library (no Bottles sidebar)" '! print -r -- "$dump" | grep -q "AXHeading: Bottles"'
-for n in $names; do check "tile: $n" 'print -r -- "$dump" | grep -q "AXButton: $n"'; done
+# a tile goes by its game's name once matched (Steam lookups run meanwhile, so either name passes)
+titles=(${(f)"$(print -rl -- $names | /usr/bin/python3 -I "$ROOT/app/Tests/ui/titles.py" "$GAMES" "$REAL/learned-games.json")"})
+for i in {1..$#names}; do
+    n=$names[$i] t=$titles[$i]
+    check "tile: $t" 'print -r -- "$dump" | grep -qF -e "AXButton: $n" -e "AXButton: $t"'
+done
 check "Red Dead Redemption 2 plays (tested on Mac)" 'print -r -- "$dump" | grep -E "AXButton: Red Dead Redemption 2" | grep -qE "Plays great|Runs on this Mac"'
 # installed games the list doesn't know are looked up on Steam's store in the background, one request every 1.5 s
 for i in {1..20}; do grep -q '"Sainthood"' "$home/learned-games.json" 2>/dev/null && break; sleep 1; done

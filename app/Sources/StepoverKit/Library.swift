@@ -43,9 +43,13 @@ public enum Library {
                 // a launcher made from a Steam game's own exe is that Steam game's tile (when Steam can start it)
                 let exe = program.exe.lowercased()
                 if client != nil, games.contains(where: { exe.hasPrefix($0.windowsFolder.lowercased() + "\\") }) { continue }
-                let entry = index.match(name: program.name, exe: fileName(program.exe)) ?? index.match(name: bottle.name, exe: nil)
-                    ?? learned?.match(name: program.name, exe: nil)
-                out.append(LibraryGame(id: "\(bottle.id)|\(program.name)", name: program.name, bottle: bottle, kind: .program(program),
+                let own = index.match(name: program.name, exe: fileName(program.exe))
+                let byBottle = index.match(name: bottle.name, exe: nil)
+                let entry = own ?? byBottle ?? learned?.match(name: program.name, exe: nil)
+                // the tile goes by the game's own name ("Castlevania: Belmont's Curse", not its folder's "Castlevania -
+                // Belmont's Curse"), unless only the bottle's name matched: the program may be a tool beside the game
+                let name = own == nil && byBottle != nil ? program.name : entry?.name ?? program.name
+                out.append(LibraryGame(id: "\(bottle.id)|\(program.name)", name: name, bottle: bottle, kind: .program(program),
                                        entry: entry, lastPlayed: played(bottle, program.name), steamAppID: entry?.steam, launch: program,
                                        note: notes[bottle.name]))
             }
@@ -64,7 +68,7 @@ public enum Library {
         let coming = installs.filter { !$0.isDone }.sorted { $0.added > $1.added }.map { job -> LibraryGame in
             let entry = job.steam.flatMap { index.entry(steam: $0) } ?? index.match(name: job.name, exe: nil)
                 ?? learned?.match(name: job.name, exe: nil)
-            return LibraryGame(id: "install:\(job.id)", name: job.name,
+            return LibraryGame(id: "install:\(job.id)", name: entry?.name ?? job.name,
                                bottle: Bottle(url: Paths.bottles.appendingPathComponent(job.bottle ?? job.name)), kind: .install(job),
                                entry: entry, lastPlayed: nil, steamAppID: job.steam ?? entry?.steam, launch: Program(name: job.name, exe: ""))
         }

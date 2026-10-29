@@ -71,6 +71,28 @@ final class LibraryTests: XCTestCase {
         XCTAssertEqual(games.first?.name, "Launcher")
     }
 
+    // A game added from its folder is named like the folder ("Castlevania - Belmont's Curse") and a program like its
+    // shortcut ("Hi Fi Rush"); once matched, the tile goes by the game's own name. What runs, what recent.json
+    // records and the tile's id (hidden games) keep the program's name.
+    func testTilesGoByTheGamesOwnName() {
+        let castlevania = bottle("Castlevania - Belmont's Curse"), hifi = bottle("Hi-Fi Rush")
+        let learned = GameIndex(GamesList(format: 1, generated: "", credits: [], games: [
+            GameEntry(id: "steam:4231820", name: "Castlevania: Belmont's Curse", names: ["Castlevania - Belmont's Curse"], steam: 4231820)]))
+        let program = Program(name: "Castlevania - Belmont's Curse", exe: #"C:\Games\Castlevania\Castlevania Belmont's Curse.exe"#)
+        let recent = [RecentGames.Entry(bottle: castlevania.name, program: program.name, played: Date())]
+        let games = Library.games(bottles: [(castlevania, config([program])),
+                                            (hifi, config([Program(name: "Hi Fi Rush", exe: #"C:\Games\Hi-Fi RUSH\Hi-Fi-RUSH.exe"#)]))],
+                                  steamApps: { _ in [] }, index: index, recent: recent, learned: learned)
+        XCTAssertEqual(games.map(\.name), ["Castlevania: Belmont's Curse", "Hi-Fi RUSH"])
+        XCTAssertEqual(games[0].launch.name, "Castlevania - Belmont's Curse")
+        XCTAssertEqual(games[0].id, "\(castlevania.id)|Castlevania - Belmont's Curse")
+        XCTAssertNotNil(games[0].lastPlayed)
+
+        let job = InstallJob(source: "/Users/x/Downloads/Castlevania - Belmont's Curse", name: "Castlevania - Belmont's Curse")
+        let coming = Library.games(bottles: [], steamApps: { _ in [] }, index: index, recent: [], learned: learned, installs: [job])
+        XCTAssertEqual(coming.map(\.name), ["Castlevania: Belmont's Curse"])
+    }
+
     func testSteamClientFromTheInstallWhenNoProgram() throws {
         let steam = bottle("Steam")
         let exe = steam.cDrive.appendingPathComponent("Program Files (x86)/Steam/steam.exe")
@@ -94,10 +116,11 @@ final class LibraryTests: XCTestCase {
         XCTAssertEqual(games[0].launch.args, ["-silent", "-applaunch", "1174180"])
         XCTAssertEqual(games[0].launch.env, ["X": "1"])
 
-        let odd = bottle("Odd Steam")   // Steam somewhere Stepover can't find: the launcher stays
+        let odd = bottle("Odd Steam")   // Steam somewhere Stepover can't find: the launcher stays, named for its game
         let launcher = Program(name: "RDR2 launcher", exe: rdr2Folder + #"\RDR2.exe"#)
         let kept = Library.games(bottles: [(odd, config([launcher]))], steamApps: { _ in [rdr2] }, index: index, recent: [])
-        XCTAssertEqual(kept.map(\.name), ["RDR2 launcher"])
+        XCTAssertEqual(kept.map(\.launch.name), ["RDR2 launcher"])
+        XCTAssertEqual(kept.map(\.name), ["Red Dead Redemption 2"])
     }
 
     func testShortCopyAndTone() {

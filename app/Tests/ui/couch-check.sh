@@ -28,7 +28,8 @@ mkdir -p "$home/Bottles" "$home/Runtimes"
 find "$REAL/Bottles" "$REAL/Runtimes" -mindepth 1 -maxdepth 1 -type d | while read -r d; do cp -cR "$d" "$home/${${d:h}:t}/"; done
 cp "$REAL/recent.json" "$REAL/learned-games.json" "$home/" 2>/dev/null   # learned: no Steam lookups, covers at once
 [ -d "$REAL/Art" ] && cp -cR "$REAL/Art" "$home/"   # covers change the layout (they once pushed the row off screen)
-order=(${(f)"$(/usr/bin/python3 -I -c 'import json,sys;[print(e["program"]) for e in sorted(json.load(open(sys.argv[1])), key=lambda e: -e["played"])]' "$home/recent.json" 2>/dev/null)"})
+order=(${(f)"$(/usr/bin/python3 -I -c 'import json,sys;[print(e["program"]) for e in sorted(json.load(open(sys.argv[1])), key=lambda e: -e["played"])]' "$home/recent.json" 2>/dev/null \
+    | /usr/bin/python3 -I "$ROOT/app/Tests/ui/titles.py" "$GAMES" "$home/learned-games.json")"})   # as the tiles name them
 
 quit_test
 open -n --env STEPOVER_HOME="$home" --env STEPOVER_GAMES_LIST="$GAMES" --env STEPOVER_NO_CONTROLLER=1 "$APP"
