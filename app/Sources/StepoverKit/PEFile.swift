@@ -7,11 +7,18 @@ public struct PEFile {
     public let machine: Machine
     /// Lowercased DLL names from the import and delay-import tables.
     public let imports: Set<String>
+    /// The optional header's Subsystem: 2 is a windowed program, 3 a console one.
+    public let subsystem: UInt16
+    /// The COFF header's Characteristics.
+    public let characteristics: UInt16
     let data: Data
     let sections: [(va: UInt32, size: UInt32, raw: UInt32)]
     let resourceRVA: UInt32
 
     public var is64Bit: Bool { if case .x86_64 = machine { return true }; return false }
+    public var isWindowed: Bool { subsystem == 2 }
+    /// IMAGE_FILE_LARGE_ADDRESS_AWARE: a 32-bit program allowed above 2 GB (what freezes unarc; spec Appendix A).
+    public var isLargeAddressAware: Bool { characteristics & 0x20 != 0 }
 
     public init?(url: URL) {
         guard let data = try? Data(contentsOf: url, options: .alwaysMapped), data.count > 0x40 else { return nil }
@@ -23,7 +30,9 @@ public struct PEFile {
               let machineRaw = u16(peOffset + 4), let sectionCount = u16(peOffset + 6),
               let optSize = u16(peOffset + 20), let magic = u16(peOffset + 24) else { return nil }
         machine = machineRaw == 0x14c ? .i386 : machineRaw == 0x8664 ? .x86_64 : .other(machineRaw)
+        characteristics = u16(peOffset + 22) ?? 0
         let opt = peOffset + 24
+        subsystem = u16(opt + 68) ?? 0
         let dirs = opt + (magic == 0x20b ? 112 : 96)
         func dir(_ index: Int) -> UInt32 { u32(dirs + index * 8) ?? 0 }
 
@@ -107,6 +116,39 @@ public struct PEFile {
         let rva = u32(current.target), size = Int(u32(current.target + 4))
         guard let start = offset(rva), start + size <= data.count, size > 0 else { return nil }
         return data.subdata(in: start..<start + size)
+    }
+
+    /// The version resource's ProductName ("Tiny Game" for an Inno Setup installer made for it).
+    public var productName: String? {
+        guard resourceRVA != 0, let base = offset(resourceRVA),
+              let versionType = entries(base, base: base).first(where: { $0.id == 16 && $0.isDir }),   // RT_VERSION
+              let first = entries(versionType.target, base: base).first,
+              let blob = firstData(first, base: base) else { return nil }
+        let key = Data("ProductName".utf16.flatMap { [UInt8($0 & 0xff), UInt8($0 >> 8)] } + [0, 0])
+        guard let found = blob.range(of: key) else { return nil }
+        // The value follows the key's terminator, padded to a 4-byte boundary, as UTF-16 up to a 0 character.
+        var at = (found.upperBound - blob.startIndex + 3) & ~3
+        var units: [UInt16] = []
+        while at + 1 < blob.count {
+            let unit = UInt16(blob[blob.startIndex + at]) | UInt16(blob[blob.startIndex + at + 1]) << 8
+            if unit == 0 { break }
+            units.append(unit)
+            at += 2
+        }
+        let name = String(decoding: units, as: UTF16.self).trimmingCharacters(in: .whitespaces)
+        return name.isEmpty ? nil : name
+    }
+
+    /// The same file with IMAGE_FILE_LARGE_ADDRESS_AWARE (0x20) cleared in the COFF characteristics; nil if it isn't a
+    /// Windows program. Spec Appendix A: the copy of an installer's setup.tmp that doesn't freeze unarc.
+    public static func clearingLargeAddressAware(_ data: Data) -> Data? {
+        func u16(_ o: Int) -> Int? { o + 2 <= data.count ? Int(data[data.startIndex + o]) | Int(data[data.startIndex + o + 1]) << 8 : nil }
+        guard u16(0) == 0x5A4D, let low = u16(0x3C), let high = u16(0x3E) else { return nil }
+        let pe = low | high << 16
+        guard u16(pe) == 0x4550, u16(pe + 2) == 0, let flags = u16(pe + 22) else { return nil }
+        var out = data
+        out[out.startIndex + pe + 22] = UInt8(flags & 0xff & ~0x20)
+        return out
     }
 
     /// The program's main icon group as .ico file data.
