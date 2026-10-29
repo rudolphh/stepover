@@ -36,6 +36,19 @@ final class SteamStoreTests: XCTestCase {
                        "https://store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport?nAppID=1174180&l=english")
     }
 
+    func testSearchTermDropsSeparators() {
+        // Steam's search finds nothing for "Castlevania - Belmont's Curse" (folders write ":" as " - "), but finds
+        // "Castlevania: Belmont's Curse" for "Castlevania Belmont's Curse" (2026-10-29)
+        func term(_ name: String) -> String? {
+            URLComponents(url: SteamStore.searchURL(name), resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "term" }?.value
+        }
+        XCTAssertEqual(term("Castlevania - Belmont's Curse"), "Castlevania Belmont's Curse")
+        XCTAssertEqual(term("Batman: Arkham Asylum"), "Batman Arkham Asylum")
+        XCTAssertEqual(term("Hollow Knight \u{2013} Silksong"), "Hollow Knight Silksong")
+        XCTAssertEqual(term("Half-Life 2"), "Half-Life 2")
+        XCTAssertEqual(term("Spider-Man"), "Spider-Man")
+    }
+
     func testStoreFactsRDR2() {
         let r = SteamStore.storeFacts(appdetails: rdr2, appID: 1174180, checked: "2026-10-28")
         XCTAssertEqual(r?.name, "Red Dead Redemption 2")

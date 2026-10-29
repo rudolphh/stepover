@@ -16,9 +16,13 @@ public enum SteamStore {
         URL(string: "https://store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport?nAppID=\(appID)&l=english")!
     }
 
+    /// The search term: Steam's search finds nothing when the name holds a spaced dash ("Castlevania - Belmont's Curse",
+    /// how folder names write a colon), so colons and spaced dashes become spaces. Matching stays exact (exactMatch).
     public static func searchURL(_ term: String) -> URL {
+        let words = term.replacingOccurrences(of: #"\s*:\s*|\s+[-\u2013\u2014]+\s+"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
         var parts = URLComponents(string: "https://store.steampowered.com/api/storesearch/")!
-        parts.queryItems = [URLQueryItem(name: "term", value: term), URLQueryItem(name: "cc", value: "us"), URLQueryItem(name: "l", value: "en")]
+        parts.queryItems = [URLQueryItem(name: "term", value: words), URLQueryItem(name: "cc", value: "us"), URLQueryItem(name: "l", value: "en")]
         return parts.url!
     }
 
