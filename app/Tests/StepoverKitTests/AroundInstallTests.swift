@@ -56,6 +56,20 @@ final class AroundInstallTests: XCTestCase {
         XCTAssertEqual(DownloadsScan.candidates(in: dir, now: now).map(\.lastPathComponent), ["New Game", "x.iso"])
     }
 
+    func testFolderStillChanging() {
+        let now = Date()
+        write("copying/Game/data.bin", "x"); age("copying/Game/data.bin", seconds: 3_600, now: now)
+        write("copying/setup.exe", "x"); age("copying/setup.exe", seconds: 3_600, now: now)
+        age("copying/Game", seconds: 3_600, now: now); age("copying", seconds: 3_600, now: now)
+        XCTAssertFalse(GameFolder.isChanging(dir.appendingPathComponent("copying"), now: now))
+        age("copying/Game/data.bin", seconds: 20, now: now)          // a file two levels down still being written
+        XCTAssertTrue(GameFolder.isChanging(dir.appendingPathComponent("copying"), now: now))
+        // a dropped file: only the file itself (it may sit in a busy Downloads folder)
+        XCTAssertFalse(GameFolder.isChanging(dir.appendingPathComponent("copying/setup.exe"), now: now))
+        age("copying/setup.exe", seconds: 10, now: now)
+        XCTAssertTrue(GameFolder.isChanging(dir.appendingPathComponent("copying/setup.exe"), now: now))
+    }
+
     func testPersonalFoldersInside() throws {
         let home = dir.appendingPathComponent("home/Documents")
         try fm.createDirectory(at: home, withIntermediateDirectories: true)

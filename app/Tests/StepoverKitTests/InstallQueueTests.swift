@@ -57,8 +57,9 @@ final class InstallQueueTests: XCTestCase {
         var cli = job("B", .copying(done: 1, total: 2))
         cli.owner = 222
         var queue = InstallQueue(jobs: [gone, cli, job("C", .waiting)])
-        queue.markInterrupted(alive: { $0 == 222 })
+        let flipped = queue.markInterrupted(alive: { $0 == 222 })
         XCTAssertEqual(queue.jobs.map(\.stage), [.failed(.interrupted), .copying(done: 1, total: 2), .waiting])
+        XCTAssertEqual(flipped.map(\.name), ["A"])   // so their bottles can be stopped: the installer may still be running
     }
 
     private func tiles(_ programs: [Program], installs: [InstallJob], played: [String] = []) -> [LibraryGame] {
@@ -68,6 +69,37 @@ final class InstallQueueTests: XCTestCase {
         let recent = played.enumerated().map { RecentGames.Entry(bottle: $1, program: $1, played: Date(timeIntervalSince1970: Double(100 - $0))) }
         return Library.games(bottles: bottles, steamApps: { _ in [] }, index: GameIndex(GamesList(format: 1, generated: "", credits: [], games: [])),
                              recent: recent, installs: installs)
+    }
+
+    func testNextSkipsClaimedJobs() {
+        var claimed = job("A", .waiting, added: 1)
+        claimed.owner = 333   // a `stepover add` waiting its turn
+        var queue = InstallQueue(jobs: [claimed, job("B", .waiting, added: 2)])
+        XCTAssertEqual(queue.next()?.name, "B")
+        let flipped = queue.markInterrupted(alive: { _ in false })   // that stepover add was stopped
+        XCTAssertEqual(flipped, [])
+        XCTAssertNil(queue.jobs[0].owner)                            // its game is free to install
+        XCTAssertEqual(queue.jobs[0].stage, .waiting)
+        XCTAssertEqual(queue.next()?.name, "A")
+    }
+
+    func testOwnerAlive() {
+        XCTAssertTrue(InstallQueue.ownerAlive(getpid()))    // this test runner: StepoverPackageTests
+        XCTAssertFalse(InstallQueue.ownerAlive(1))          // launchd is alive but isn't Stepover
+        XCTAssertFalse(InstallQueue.ownerAlive(-5))
+    }
+
+    func testUnfinishedBottles() {
+        let queue = InstallQueue(jobs: [job("A", .installing(written: 0), bottle: "A"), job("B", .done(addOnFailed: nil), bottle: "B"),
+                                        job("C", .failed(.damaged), bottle: "C"), job("D", .waiting)])
+        XCTAssertEqual(queue.unfinishedBottles, ["A", "C"])
+    }
+
+    func testAddOnNoteOnTheFinishedGame() {
+        let gog = Program(name: "Tiny GOG", exe: #"C:\Games\Tiny GOG\TinyGog.exe"#)
+        let found = tiles([gog], installs: [job("Tiny GOG", .done(addOnFailed: "Extra"), bottle: "Tiny GOG")])
+        XCTAssertEqual(found.first?.note, "Ready; the Extra add-on didn't install")
+        XCTAssertNil(tiles([gog], installs: [job("Tiny GOG", .done(addOnFailed: nil), bottle: "Tiny GOG")]).first?.note)
     }
 
     func testHalfMadeBottleHasNoPlayTile() {

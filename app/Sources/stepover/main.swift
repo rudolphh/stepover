@@ -310,6 +310,18 @@ do {
                 continue
             }
             let job = held.id
+            // claimed at once, so the app doesn't start it too; then one install at a time (D10)
+            if let i = queue.jobs.firstIndex(where: { $0.id == job }) { queue.jobs[i].owner = getpid() }
+            try? queue.save()
+            var waited = false
+            while true {
+                var current = InstallQueue.load()
+                if !current.markInterrupted(alive: InstallQueue.ownerAlive).isEmpty { try? current.save() }
+                guard let other = current.jobs.first(where: { $0.stage.isActive && $0.id != job }) else { break }
+                if !waited { print("\(found.name): \(InstallStage.waiting.text) (\(other.name) is installing)"); fflush(stdout); waited = true }
+                Thread.sleep(forTimeInterval: 5)
+            }
+            queue = InstallQueue.load()
             let name = AddGame.bottleName(for: found.name)
             if let i = queue.jobs.firstIndex(where: { $0.id == job }) {
                 queue.jobs[i].owner = getpid()

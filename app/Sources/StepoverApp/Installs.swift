@@ -8,9 +8,7 @@ extension Store {
     /// At launch: installs whose process is gone (Stepover quit or crashed) become Interrupted, with Try Again.
     func loadInstalls() {
         var queue = InstallQueue.load()
-        queue.markInterrupted(alive: { pid in
-            kill(pid, 0) == 0 && (RunningPrograms.arguments(pid).first?.lowercased().contains("stepover") ?? false)
-        })
+        stopOrphans(queue.markInterrupted(alive: InstallQueue.ownerAlive))
         try? queue.save()
         installs = queue.jobs
         refreshTrashOffers()
@@ -94,7 +92,11 @@ extension Store {
 
     /// The next waiting game, when nothing is installing (here or in `stepover add`) and the runtime is in.
     func startNextInstall() {
-        guard runtimeReady, installingJob == nil, let job = InstallQueue.load().next() else { return }
+        guard runtimeReady, installingJob == nil else { return }
+        var queue = InstallQueue.load()
+        let orphans = queue.markInterrupted(alive: InstallQueue.ownerAlive)   // a `stepover add` stopped midway
+        if !orphans.isEmpty { try? queue.save(); installs = queue.jobs; stopOrphans(orphans) }
+        guard let job = queue.next() else { return }
         let name = AddGame.bottleName(for: job.name)
         installingJob = job.id
         mutateInstalls { queue in
@@ -126,6 +128,14 @@ extension Store {
                 self.startNextInstall()
             }
         }
+    }
+
+    /// Interrupted installs' installers may still run in their bottles, unwatched (a crash or force quit leaves them):
+    /// they are Stepover's own bottles, so they are stopped.
+    func stopOrphans(_ jobs: [InstallJob]) {
+        let bottles = jobs.compactMap(\.bottle).map { Bottle(url: Paths.bottles.appendingPathComponent($0)) }
+        guard !bottles.isEmpty else { return }
+        Task.detached { for bottle in bottles where bottle.isRunning { try? Launcher.stop(bottle) } }
     }
 
     // MARK: the tile's buttons

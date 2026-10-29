@@ -69,17 +69,33 @@ public struct InstallQueue: Codable, Sendable {
         return job
     }
 
-    /// The first waiting job, when nothing is installing.
+    /// The first waiting job nobody has claimed (`stepover add` claims its own while it waits its turn), when nothing is
+    /// installing.
     public func next() -> InstallJob? {
-        jobs.contains { $0.stage.isActive } ? nil : jobs.first { $0.stage == .waiting }
+        jobs.contains { $0.stage.isActive } ? nil : jobs.first { $0.stage == .waiting && $0.owner == nil }
     }
 
-    /// Installs whose process is gone (Stepover quit or crashed) become Interrupted, with Try Again.
-    public mutating func markInterrupted(alive: (Int32) -> Bool) {
+    /// Installs whose process is gone (Stepover quit or crashed, `stepover add` was stopped) become Interrupted, with Try
+    /// Again. Returns them: their installer may still be running in their bottle, unwatched.
+    @discardableResult
+    public mutating func markInterrupted(alive: (Int32) -> Bool) -> [InstallJob] {
+        var flipped: [InstallJob] = []
         for i in jobs.indices where jobs[i].stage.isActive && !(jobs[i].owner.map(alive) ?? false) {
             jobs[i].stage = .failed(.interrupted)
+            flipped.append(jobs[i])
         }
+        // a claim on a waiting job by a process that's gone is released, so the game still installs
+        for i in jobs.indices where jobs[i].stage == .waiting && jobs[i].owner.map({ !alive($0) }) == true { jobs[i].owner = nil }
+        return flipped
     }
+
+    /// The process that owns a job is still Stepover (the app or `stepover add`), not a reused pid.
+    public static func ownerAlive(_ pid: Int32) -> Bool {
+        pid > 0 && kill(pid, 0) == 0 && RunningPrograms.arguments(pid).contains { $0.lowercased().contains("stepover") }
+    }
+
+    /// Bottles of games not ready yet (on their way in, or failed): nothing may offer Play in them.
+    public var unfinishedBottles: Set<String> { Set(jobs.filter { !$0.isDone }.compactMap(\.bottle)) }
 }
 
 /// The offer to move the dropped folder to the Trash once the game has had a good run (spec D13).

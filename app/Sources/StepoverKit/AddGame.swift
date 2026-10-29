@@ -76,6 +76,29 @@ public enum AddGame {
         }
     }
 
+    /// NSIS's batch line: the installer, quoted, then /S /D=<dir> raw and last. cmd reads `%` everywhere and `^ &` outside
+    /// quotes, so those are escaped (`| < >` can't be in a folder name).
+    public static func nsisBatchLine(file: String, dir: String) -> String {
+        let quoted = file.replacingOccurrences(of: "%", with: "%%")
+        let raw = dir.replacingOccurrences(of: "^", with: "^^").replacingOccurrences(of: "&", with: "^&")
+            .replacingOccurrences(of: "%", with: "%%")
+        return "@\"\(quoted)\" /S /D=\(raw)\r\n"
+    }
+
+    /// The batch file in the Windows code page Wine's cmd reads it in; nil when the names can't be written in it.
+    public static func nsisBatch(file: String, dir: String) -> Data? {
+        nsisBatchLine(file: file, dir: dir).data(using: .windowsCP1252, allowLossyConversion: false)
+    }
+
+    /// The folder in plain letters: accents dropped, anything else outside ASCII left out.
+    public static func asciiDir(_ dir: String) -> String {
+        let folded = dir.applyingTransform(.stripDiacritics, reverse: false) ?? dir
+        let ascii = String(String.UnicodeScalarView(folded.unicodeScalars.filter(\.isASCII)))
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+        return ascii.hasSuffix(#"\"#) ? ascii + "Game" : ascii
+    }
+
     /// The message of the last error Inno Setup logged with its message boxes suppressed (the last line of that box).
     public static func innoError(fromLog log: String) -> String? {
         let lines = log.components(separatedBy: .newlines)
@@ -167,6 +190,12 @@ public enum AddGame {
             try? outcome.save(to: bottle)
         }
         do {
+            // a folder still being copied in (no partial-download names to tell) waits until it has settled
+            while GameFolder.isChanging(source) {
+                guard FileManager.default.fileExists(atPath: source.path) else { throw AddGameError(.folderGone) }
+                report(.gettingReady)
+                Thread.sleep(forTimeInterval: 5)
+            }
             let result = try install(plan, source: source, game: game, bottle: bottle, knownExes: knownExes, outcome: &outcome, report: report)
             finish("ready")
             return result
@@ -262,9 +291,13 @@ public enum AddGame {
             // NSIS reads /D= raw, and Wine would quote it; a batch file passes the line as written.
             let temp = bottle.cDrive.appendingPathComponent("windows/temp")
             try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
-            let bat = temp.appendingPathComponent("stepover-install.bat")
-            try ("@\"\(file)\" " + silentArguments(.nsis, dir: dir, log: "").joined(separator: " ") + "\r\n")
-                .write(to: bat, atomically: true, encoding: .utf8)
+            var batch = nsisBatch(file: file, dir: dir)
+            if batch == nil {   // a name Wine's cmd can't read: the game goes to a plain-letters folder (found as a new folder)
+                batch = nsisBatch(file: file, dir: asciiDir(dir))
+                Launcher.appendLog(bottle, "the NSIS installer gets \(asciiDir(dir)): cmd can't read \(dir)")
+            }
+            try (batch ?? Data(nsisBatchLine(file: file, dir: dir).utf8))
+                .write(to: temp.appendingPathComponent("stepover-install.bat"), options: .atomic)
             args = ["cmd", "/c", #"C:\windows\temp\stepover-install.bat"#]
         }
         let workdir = installer.url.deletingLastPathComponent()

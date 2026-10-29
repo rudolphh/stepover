@@ -77,6 +77,19 @@ final class AddGameTests: XCTestCase {
                         #"/LOG=C:\windows\temp\stepover-inno-1-copy.log"#])
     }
 
+    func testNSISBatchLineEscapesCmd() {
+        // & ^ and % are live in a batch line; the quoted path keeps & and ^ but not %
+        XCTAssertEqual(AddGame.nsisBatchLine(file: #"Z:\Users\x\Tiny 100%\setup.exe"#, dir: #"C:\Games\Assassin's Creed & Pokémon ^1"#),
+                       "@\"Z:\\Users\\x\\Tiny 100%%\\setup.exe\" /S /D=C:\\Games\\Assassin's Creed ^& Pokémon ^^1\r\n")
+    }
+
+    func testNSISBatchIsWindowsEncoded() throws {
+        let data = try XCTUnwrap(AddGame.nsisBatch(file: #"Z:\x\setup.exe"#, dir: #"C:\Games\Pokémon"#))
+        XCTAssertTrue(data.contains(0xE9))                      // é in the Windows code page, which Wine's cmd reads
+        XCTAssertNil(AddGame.nsisBatch(file: #"Z:\x\setup.exe"#, dir: #"C:\Games\ゲーム"#))   // not encodable: the caller falls back
+        XCTAssertEqual(AddGame.asciiDir(#"C:\Games\Pokémon ゲーム"#), #"C:\Games\Pokemon"#)
+    }
+
     func testInnoErrorLine() {
         let log = """
         2026-10-29 12:55:03.300   Dest filename: C:\\Games\\Tiny Game\\TinyGame.exe

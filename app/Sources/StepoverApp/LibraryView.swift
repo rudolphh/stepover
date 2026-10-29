@@ -226,6 +226,7 @@ struct GameTile: View {
                         VerdictPill(text: verdict.kind.short, tone: verdict.kind.tone)
                     }
                     if let job = game.install { InstallLine(job: job) }
+                    if let note = game.note { Text(note).font(.caption).foregroundStyle(.secondary).lineLimit(3) }
                     if store.hidden.contains(game.id) { Text("Hidden").font(.caption2).foregroundStyle(.tertiary) }
                 }
                 .padding(.horizontal, 4)
@@ -325,6 +326,7 @@ struct HeroView: View {
                 if let job = game.install {
                     InstallControls(job: job)
                 } else {
+                    if let note = game.note { Text(note).font(.callout.weight(.medium)) }
                     HStack(spacing: 10) {
                         PlayButton(game: game).keyboardShortcut(.defaultAction)   // Return plays the selected game
                         Button("Settings") { store.openSettings(game) }.controlSize(.large)

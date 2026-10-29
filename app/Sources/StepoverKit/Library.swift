@@ -13,6 +13,8 @@ public struct LibraryGame: Identifiable, Hashable, Sendable {
     public var steamAppID: Int?           // the Steam game's own id, else the entry's
     /// What Play runs: the program, or the Steam client with -applaunch, named after the game (RecentGames).
     public var launch: Program
+    /// A line about how the game came in, for a game added from a folder whose add-on didn't install (spec D1b).
+    public var note: String? = nil
 
     public var isSteamClient: Bool { if case .steamClient = kind { return true } else { return false } }
     public var install: InstallJob? { if case .install(let job) = kind { return job } else { return nil } }
@@ -28,7 +30,11 @@ public enum Library {
         }
         var out: [LibraryGame] = []
         // a game still on its way in has only its install tile, never a Play tile (spec anti-goals)
-        let unfinished = Set(installs.filter { !$0.isDone }.compactMap(\.bottle))
+        let unfinished = InstallQueue(jobs: installs).unfinishedBottles
+        let notes = Dictionary(installs.compactMap { job -> (String, String)? in
+            guard let bottle = job.bottle, case .done(let addOn?) = job.stage else { return nil }
+            return (bottle, InstallStage.done(addOnFailed: addOn).text)
+        }, uniquingKeysWith: { a, _ in a })
         for (bottle, config) in bottles where !unfinished.contains(bottle.name) {
             let apps = steamApps(bottle)
             let client = config.programs.first { fileName($0.exe).lowercased() == "steam.exe" } ?? SteamLibrary.client(in: bottle)
@@ -40,7 +46,8 @@ public enum Library {
                 let entry = index.match(name: program.name, exe: fileName(program.exe)) ?? index.match(name: bottle.name, exe: nil)
                     ?? learned?.match(name: program.name, exe: nil)
                 out.append(LibraryGame(id: "\(bottle.id)|\(program.name)", name: program.name, bottle: bottle, kind: .program(program),
-                                       entry: entry, lastPlayed: played(bottle, program.name), steamAppID: entry?.steam, launch: program))
+                                       entry: entry, lastPlayed: played(bottle, program.name), steamAppID: entry?.steam, launch: program,
+                                       note: notes[bottle.name]))
             }
             if let client {
                 for app in games {

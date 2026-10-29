@@ -175,7 +175,9 @@ final class Store: ObservableObject {
     }
 
     func reload() {
-        bottles = Bottle.all()
+        // a game still on its way in has no bottle page (and so no Play there, or in the Dock menu) until it's ready
+        let unfinished = InstallQueue(jobs: installs).unfinishedBottles
+        bottles = Bottle.all().filter { !unfinished.contains($0.name) }
         configs = Dictionary(uniqueKeysWithValues: bottles.map { ($0.id, $0.loadConfig()) })
         display = Dictionary(uniqueKeysWithValues: bottles.map { ($0.id, ($0.highResolution, $0.dpi)) })
         index = RuntimeIndex.load()

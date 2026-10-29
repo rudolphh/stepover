@@ -58,6 +58,12 @@ check "the shared queue has it, done" python3 -I -c 'import json,sys; j=[x for x
 add "$fixtures/Tiny NSIS Game"
 check "NSIS installer: added into C:\\Games" program_is "Tiny NSIS Game" 'C:\\Games\\Tiny NSIS Game\\TinyNsisGame.exe'
 
+# 2b. NSIS into a folder whose name cmd would misread (& and %): the batch line escapes them
+odd="$home/work/Tiny & Co 100%"
+cp -Rp "$fixtures/Tiny NSIS Game" "$odd"   # -p keeps the dates: a just-copied folder waits a minute to settle
+add "$odd"
+check "NSIS installer: a name with & and % installs where it should" program_is "Tiny & Co 100%" 'C:\\Games\\Tiny & Co 100%\\TinyNsisGame.exe'
+
 # 3. a base installer and an add-on, one game
 add "$fixtures/Tiny GOG"
 check "base + add-on: added" test $st -eq 0
@@ -68,7 +74,7 @@ check "base + add-on: one bottle" test ! -d "$bottles/Tiny GOG 2"
 add "$fixtures/Tiny Installed Game"
 check "installed game: copied, TinyGame.exe chosen" program_is "Tiny Installed Game" 'C:\\Games\\Tiny Installed Game\\TinyGame.exe'
 
-# 5. damaged installer files
+# 5. damaged installer files (copied just now, so it also waits for the folder to settle first)
 damaged="$home/work/Damaged.Game.v1.0-GROUP"
 cp -R "$game" "$damaged"
 python3 -I -c 'import sys; p=sys.argv[1]; d=bytearray(open(p,"rb").read()); n=len(d)//2; d[n:n+64]=bytes(b^0xff for b in d[n:n+64]); open(p,"wb").write(d)' "$damaged/setup-1.bin"

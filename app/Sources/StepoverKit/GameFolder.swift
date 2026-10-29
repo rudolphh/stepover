@@ -80,6 +80,17 @@ public enum GameFolder {
         return game ? .installedGame(item) : .nothing
     }
 
+    /// Still being copied or downloaded: a file in the folder (three levels down) or the folder itself changed in the
+    /// last minute; for a dropped file, the file itself. Installing from it would read half-written files.
+    public static func isChanging(_ item: URL, now: Date = Date()) -> Bool {
+        func recent(_ url: URL) -> Bool {
+            let date = (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return now.timeIntervalSince(date) < 60
+        }
+        guard isDirectory(item) else { return recent(item) }
+        return recent(item) || files(in: item, levels: 3).contains(where: recent)
+    }
+
     static func installers(in folder: URL) -> [Installer] {
         children(of: folder).compactMap { url in kind(of: url).map { Installer(url: url, kind: $0, role: .addOn) } }
     }
