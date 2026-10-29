@@ -15,9 +15,11 @@ final class GameArtTests: XCTestCase {
 
     private let jpeg = Data([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10])
 
-    /// A CDN that answers each app id with a status and a body; any other id is "offline".
+    /// A CDN that answers each app id with a status and a body, beside a store list with no art for any game; any
+    /// other id is "offline".
     private func cdn(_ answers: [Int: (Int, Data)]) -> GameArt.Load {
         { url in
+            if url.absoluteString.contains("IStoreBrowseService/GetItems") { return (Data(#"{"response":{"store_items":[]}}"#.utf8), 200) }
             guard let id = answers.keys.first(where: { url.absoluteString.contains("/\($0)/") }) else { throw URLError(.notConnectedToInternet) }
             return (answers[id]!.1, answers[id]!.0)
         }
@@ -80,6 +82,66 @@ final class GameArtTests: XCTestCase {
         XCTAssertNil(none)
         XCTAssertTrue(FileManager.default.fileExists(atPath: cache.appendingPathComponent("3-hero.none").path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: cache.appendingPathComponent("3.none").path))   // the cover is still asked for
+    }
+
+    // Newer games keep their cover and key art at hashed paths only Steam's store lists (GetItems); the fixed path
+    // 404s for them. Castlevania: Belmont's Curse (2026), trimmed from Steam's real answer.
+    private let castlevaniaItems = Data(#"{"response":{"store_items":[{"item_type":0,"id":4231820,"success":1,"visible":true,"name":"Castlevania: Belmont's Curse","appid":4231820,"type":0,"assets":{"asset_url_format":"steam/apps/4231820/${FILENAME}?t=1793067818","header":"6b65aec2c398006aea8b76e1463cc34d0e4ba68b/header.jpg","library_capsule":"a296479a772d37cfb6c36c59059b72d663abca38/library_capsule.jpg","library_hero":"a86259a3a341818b144f97400c4cc5b3db0e708e/library_hero.jpg","last_modified":1793067818}}]}}"#.utf8)
+    private let unknownItems = Data(#"{"response":{"store_items":[{"item_type":0,"id":8,"success":15,"visible":false,"name":"","appid":0}]}}"#.utf8)
+
+    func testStoreAssets() {
+        let assets = SteamStore.assets(castlevaniaItems, appID: 4231820)
+        XCTAssertEqual(assets?["library_capsule"], "steam/apps/4231820/a296479a772d37cfb6c36c59059b72d663abca38/library_capsule.jpg?t=1793067818")
+        XCTAssertEqual(assets?["library_hero"], "steam/apps/4231820/a86259a3a341818b144f97400c4cc5b3db0e708e/library_hero.jpg?t=1793067818")
+        XCTAssertNil(assets?["last_modified"])
+        XCTAssertEqual(SteamStore.assets(unknownItems, appID: 8), [:])                 // Steam has nothing for it
+        XCTAssertEqual(SteamStore.assets(castlevaniaItems, appID: 5), [:])            // an answer about another game
+        XCTAssertNil(SteamStore.assets(Data("<html>Log in to Wi-Fi</html>".utf8), appID: 4231820))
+        XCTAssertTrue(SteamStore.itemsURL(4231820).absoluteString.hasPrefix("https://api.steampowered.com/IStoreBrowseService/GetItems/v1/?input_json="))
+    }
+
+    /// Steam's store and CDN: GetItems answers `items`, the hashed files in `files` answer with theirs, the rest 404.
+    private func store(_ items: Result<(Data, Int), URLError>, files: [String: (Int, Data)] = [:]) -> GameArt.Load {
+        { url in
+            if url.absoluteString.contains("IStoreBrowseService/GetItems") { return try items.get() }
+            if let file = files.keys.first(where: { url.absoluteString.contains($0) }) { return (files[file]!.1, files[file]!.0) }
+            return (Data(), 404)
+        }
+    }
+
+    func testNewerGamesArtComesFromTheStoresHashedPaths() async throws {
+        let files = ["shared.fastly.steamstatic.com/store_item_assets/steam/apps/4231820/a296479a772d37cfb6c36c59059b72d663abca38/library_capsule.jpg?t=": (200, jpeg),
+                     "shared.fastly.steamstatic.com/store_item_assets/steam/apps/4231820/a86259a3a341818b144f97400c4cc5b3db0e708e/library_hero.jpg?t=": (200, jpeg)]
+        let steam = store(.success((castlevaniaItems, 200)), files: files)
+        let cover = await GameArt.fetch(4231820, into: cache, load: steam)
+        XCTAssertEqual(cover?.lastPathComponent, "4231820.jpg")
+        let hero = await GameArt.fetch(4231820, kind: .hero, into: cache, load: steam)
+        XCTAssertEqual(hero?.lastPathComponent, "4231820-hero.jpg")
+        let logo = await GameArt.fetch(4231820, kind: .logo, into: cache, load: steam)   // the store doesn't list logos
+        XCTAssertNil(logo)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: cache.appendingPathComponent("4231820-logo.none").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cache.appendingPathComponent("4231820.none").path))
+    }
+
+    // Only the store saying it has no art, or its file 404ing, is a miss to remember; the store or the file being
+    // unreachable or failing is asked again on a later launch.
+    func testTheStoresAnswerDecidesTheMiss() async throws {
+        let hashed = "store_item_assets/steam/apps/4231820/a296479a772d37cfb6c36c59059b72d663abca38/library_capsule.jpg"
+        let cases: [(id: Int, load: GameArt.Load, remembered: Bool)] = [
+            (8, store(.success((unknownItems, 200))), true),
+            (4231820, store(.success((castlevaniaItems, 200)), files: [hashed: (404, Data())]), true),
+            (4231820, store(.success((castlevaniaItems, 200)), files: [hashed: (500, Data())]), false),
+            (4231820, store(.success((castlevaniaItems, 200)), files: [hashed: (200, Data("<html>Log in to Wi-Fi</html>".utf8))]), false),
+            (4231820, store(.success((Data(), 500))), false),
+            (4231820, store(.success((Data("<html>Log in to Wi-Fi</html>".utf8), 200))), false),
+            (4231820, store(.failure(URLError(.notConnectedToInternet))), false),
+        ]
+        for (n, test) in cases.enumerated() {
+            let folder = cache.appendingPathComponent("\(n)")
+            let art = await GameArt.fetch(test.id, into: folder, load: test.load)
+            XCTAssertNil(art, "\(n)")
+            XCTAssertEqual(FileManager.default.fileExists(atPath: folder.appendingPathComponent("\(test.id).none").path), test.remembered, "\(n)")
+        }
     }
 
     func testAboutTheGameFromSteam() async throws {

@@ -16,6 +16,28 @@ public enum SteamStore {
         URL(string: "https://store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport?nAppID=\(appID)&l=english")!
     }
 
+    /// The store's list of a game's art files (GetItems, no key): newer games keep theirs at hashed paths.
+    public static func itemsURL(_ appID: Int) -> URL {
+        let request = #"{"ids":[{"appid":\#(appID)}],"context":{"language":"english","country_code":"US"},"data_request":{"include_assets":true}}"#
+        var parts = URLComponents(string: "https://api.steampowered.com/IStoreBrowseService/GetItems/v1/")!
+        parts.queryItems = [URLQueryItem(name: "input_json", value: request)]
+        return parts.url!
+    }
+
+    /// A game's art files by Steam's name for each ("library_capsule", "library_hero"), as paths under the CDN's
+    /// store_item_assets/; empty when Steam has none for the game; nil when the body isn't a GetItems answer.
+    public static func assets(_ data: Data, appID: Int) -> [String: String]? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let items = (root["response"] as? [String: Any])?["store_items"] as? [[String: Any]] else { return nil }
+        guard let assets = items.first(where: { $0["id"] as? Int == appID })?["assets"] as? [String: Any],
+              let format = assets["asset_url_format"] as? String else { return [:] }
+        var out: [String: String] = [:]
+        for case let (name, file as String) in assets where name != "asset_url_format" {
+            out[name] = format.replacingOccurrences(of: "${FILENAME}", with: file)
+        }
+        return out
+    }
+
     /// The search term: Steam's search finds nothing when the name holds a spaced dash ("Castlevania - Belmont's Curse",
     /// how folder names write a colon), so colons and spaced dashes become spaces. Matching stays exact (exactMatch).
     public static func searchURL(_ term: String) -> URL {

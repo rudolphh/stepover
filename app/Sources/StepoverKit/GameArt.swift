@@ -3,14 +3,17 @@ import Foundation
 import ImageIO
 
 /// A game's art from Steam, downloaded once into <root>/Art: the portrait cover (the Library's tiles), the wide key
-/// art and the logo (couch mode's screen). No key needed. Only Steam saying it has none (404, 403) is remembered
-/// (<id>.none, <id>-hero.none, <id>-logo.none, for 30 days); being offline, a server error or a captive portal's page
-/// isn't, so the art arrives on a later launch.
+/// art and the logo (couch mode's screen). No key needed. Newer games keep the cover and key art at hashed paths
+/// that only Steam's store list knows (SteamStore.assets); the store doesn't list logos. Only Steam saying it has
+/// none (404, 403, or nothing in the store list) is remembered (<id>.none, <id>-hero.none, <id>-logo.none, for 30
+/// days); being offline, a server error or a captive portal's page isn't, so the art arrives on a later launch.
 public enum GameArt {
     public enum Kind: Sendable {
         case cover, hero, logo
 
         var remoteName: String { self == .cover ? "library_600x900.jpg" : self == .hero ? "library_hero.jpg" : "logo.png" }
+        /// The art's name in Steam's store list.
+        var storeName: String? { self == .cover ? "library_capsule" : self == .hero ? "library_hero" : nil }
         func fileName(_ appID: Int) -> String { self == .cover ? "\(appID).jpg" : self == .hero ? "\(appID)-hero.jpg" : "\(appID)-logo.png" }
         func missName(_ appID: Int) -> String { self == .cover ? "\(appID).none" : self == .hero ? "\(appID)-hero.none" : "\(appID)-logo.none" }
         /// The file's first bytes: JPEG, or PNG for the logo (its transparency is the point).
@@ -18,6 +21,8 @@ public enum GameArt {
     }
 
     public static let defaultBase = "https://cdn.cloudflare.steamstatic.com/steam/apps"
+    /// Where the store list's paths are, on the host Steam's own store pages use for them.
+    static let storeBase = "https://shared.fastly.steamstatic.com/store_item_assets/"
 
     /// A GET: the body and the HTTP status.
     public typealias Load = @Sendable (URL) async throws -> (Data, Int)
@@ -50,22 +55,43 @@ public enum GameArt {
             if Date().timeIntervalSince(marked) < 30 * 86400 { return nil }
             try? FileManager.default.removeItem(at: miss)
         }
-        guard let (body, status) = try? await load(remoteURL(appID, kind: kind, base: base)) else { return nil }   // offline
-        if status == 404 || status == 403 {
+        var answer = await get(remoteURL(appID, kind: kind, base: base), kind: kind, load: load)
+        if answer == .missing, let name = kind.storeName { answer = await fromStore(appID, name: name, kind: kind, load: load) }
+        switch answer {
+        case .later:
+            return nil
+        case .missing:
             try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             FileManager.default.createFile(atPath: miss.path, contents: nil)
             return nil
+        case .found(let body):
+            let file = folder.appendingPathComponent(kind.fileName(appID))
+            do {
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                try body.write(to: file, options: .atomic)
+                return file
+            } catch {
+                return nil
+            }
         }
+    }
+
+    private enum Answer: Equatable { case found(Data), missing, later }
+
+    private static func get(_ url: URL, kind: Kind, load: Load) async -> Answer {
+        guard let (body, status) = try? await load(url) else { return .later }   // offline
+        if status == 404 || status == 403 { return .missing }
         // a server error, or a 200 that isn't the image (a captive portal's login page): try again later
-        guard (200..<300).contains(status), body.starts(with: kind.signature) else { return nil }
-        let file = folder.appendingPathComponent(kind.fileName(appID))
-        do {
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            try body.write(to: file, options: .atomic)
-            return file
-        } catch {
-            return nil
-        }
+        guard (200..<300).contains(status), body.starts(with: kind.signature) else { return .later }
+        return .found(body)
+    }
+
+    /// The file at the hashed path Steam's store list gives for it; missing when the list has none.
+    private static func fromStore(_ appID: Int, name: String, kind: Kind, load: Load) async -> Answer {
+        guard let (body, status) = try? await load(SteamStore.itemsURL(appID)), (200..<300).contains(status),
+              let assets = SteamStore.assets(body, appID: appID) else { return .later }
+        guard let path = assets[name], let url = URL(string: storeBase + path) else { return .missing }
+        return await get(url, kind: kind, load: load)
     }
 }
 
