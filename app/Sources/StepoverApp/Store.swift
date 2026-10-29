@@ -12,6 +12,7 @@ final class Store: ObservableObject {
     @Published var configs: [String: BottleConfig] = [:]
     @Published var running: Set<String> = []
     @Published var busy: Set<String> = []
+    @Published var creating: [String] = []        // New Bottle names still being made (~15 s)
     @Published var alert: String?
     @Published var display: [String: (highRes: Bool, dpi: Int)] = [:]
     @Published var runtimeReady = !Runtime.installed().isEmpty
@@ -175,9 +176,10 @@ final class Store: ObservableObject {
     }
 
     func reload() {
-        // a game still on its way in has no bottle page (and so no Play there, or in the Dock menu) until it's ready
+        // a game still on its way in has no bottle page (and so no Play there, or in the Dock menu) until it's ready,
+        // nor does a bottle still being made
         let unfinished = InstallQueue(jobs: installs).unfinishedBottles
-        bottles = Bottle.all().filter { !unfinished.contains($0.name) }
+        bottles = Bottle.all().filter { !unfinished.contains($0.name) && !creating.contains($0.name) }
         configs = Dictionary(uniqueKeysWithValues: bottles.map { ($0.id, $0.loadConfig()) })
         display = Dictionary(uniqueKeysWithValues: bottles.map { ($0.id, ($0.highResolution, $0.dpi)) })
         index = RuntimeIndex.load()
@@ -662,7 +664,9 @@ final class Store: ObservableObject {
     }
 
     func create(_ name: String) {
+        creating.append(name)
         work(nil, "Creating \(name)") { try Importer.create(name) } then: {
+            self.creating.removeAll { $0 == name }
             self.reload()
             self.selection = self.bottles.first { $0.name == name }?.id
         }

@@ -104,6 +104,16 @@ struct BottlesView: View {
                         }
                         .tag(bottle.id)
                     }
+                    ForEach(store.creating, id: \.self) { name in   // no tag: not selectable until it's made
+                        HStack {
+                            Image(systemName: "wineglass")
+                            Text(name)
+                            Spacer()
+                            ProgressView().controlSize(.small)
+                        }
+                        .foregroundStyle(.secondary)
+                        .help("Creating \(name)")
+                    }
                 }
                 if let update = store.runtimeUpdate {
                     Section("Wine Runtime") {
