@@ -312,6 +312,21 @@ final class Store: ObservableObject {
         }
     }
 
+    /// Makes `screen` the main display (where games go full screen), the way System Settings > Displays does.
+    func makeMainDisplay(_ screen: NSScreen) {
+        guard let target = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else { return }
+        var ids = [CGDirectDisplayID](repeating: 0, count: 16), count: UInt32 = 0
+        guard CGGetActiveDisplayList(16, &ids, &count) == .success else { return }
+        let active = Array(ids.prefix(Int(count)))
+        let origins = DisplayLayout.originsMakingMain(CGDisplayBounds(target), all: active.map(CGDisplayBounds))
+        var config: CGDisplayConfigRef?
+        guard CGBeginDisplayConfiguration(&config) == .success else { return }
+        for (id, origin) in zip(active, origins) { CGConfigureDisplayOrigin(config, id, Int32(origin.x), Int32(origin.y)) }
+        if CGCompleteDisplayConfiguration(config, .permanently) != .success {
+            alert = "That screen couldn't be made the main display; use System Settings > Displays."
+        }
+    }
+
     var openAtLogin: Bool { SMAppService.mainApp.status == .enabled }
 
     func setOpenAtLogin(_ on: Bool) {

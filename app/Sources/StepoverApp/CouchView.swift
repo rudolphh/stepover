@@ -13,6 +13,7 @@ struct CouchView: View {
     @State private var menu: Int?
     @State private var confirm: Confirm?
     @State private var enteredFullScreen = false
+    @State private var screen: NSScreen?   // the screen couch mode is on
     @FocusState private var focused: Bool
 
     enum Confirm: Equatable {
@@ -24,7 +25,9 @@ struct CouchView: View {
     private var selected: LibraryGame? { games.indices.contains(index) ? games[index] : games.first }
 
     private var menuItems: [(title: String, action: () -> Void)] {
-        var items: [(String, () -> Void)] = [("Leave Couch Mode", { store.couchMode = false })]
+        var items: [(String, () -> Void)] = []
+        if let screen, !isMain(screen) { items.append(("Make This the Main Display", { store.makeMainDisplay(screen); self.screen = screen })) }
+        items.append(("Leave Couch Mode", { store.couchMode = false }))
         items.append((store.showHidden ? "Hide Hidden Games" : "Show Hidden Games", { store.showHidden.toggle() }))
         if let running = store.runningGame { items.append(("Stop Everything", { store.quitGame(running) })) }
         if !store.runtimeReady && store.runtimeFailed { items.append(("Retry Download", { store.installRuntime() })) }
@@ -122,9 +125,15 @@ struct CouchView: View {
         }
     }
 
+    /// The main display is the one at the global origin, where games go full screen.
+    private func isMain(_ screen: NSScreen) -> Bool {
+        (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == CGMainDisplayID()
+    }
+
     private func setFullScreen(_ on: Bool) {
         DispatchQueue.main.async {
             guard let window = NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible && $0.canBecomeKey }) else { return }
+            screen = window.screen
             let isFull = window.styleMask.contains(.fullScreen)
             if on, !isFull { window.toggleFullScreen(nil); enteredFullScreen = true }
             if !on, isFull, enteredFullScreen { window.toggleFullScreen(nil); enteredFullScreen = false }
@@ -152,6 +161,8 @@ struct CouchView: View {
                 Text("Getting ready to play: \(Int(progress * 100))%")
             } else if !store.runtimeReady, store.runtimeFailed {
                 Text("Couldn't get what games need. Menu > Retry Download")
+            } else if let screen, !isMain(screen) {
+                Text("Games open on your other screen. Menu > Make This the Main Display")
             }
             Spacer()
             Label(store.controllerName.map { "\($0) connected" } ?? "No controller", systemImage: "gamecontroller")

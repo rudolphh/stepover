@@ -85,4 +85,11 @@ final class CouchTests: XCTestCase {
         XCTAssertNil(Couch.running(games, processes: [steamOnly]))     // Steam alone isn't a game running
         XCTAssertNil(Couch.running(games, processes: []))
     }
+
+    // Task 5: making the TV the main display moves every screen by the same amount
+    func testOriginsMakingMain() {
+        let mac = CGRect(x: 0, y: 0, width: 1728, height: 1117), tv = CGRect(x: 1728, y: -200, width: 3840, height: 2160)
+        XCTAssertEqual(DisplayLayout.originsMakingMain(tv, all: [mac, tv]), [CGPoint(x: -1728, y: 200), CGPoint(x: 0, y: 0)])
+        XCTAssertEqual(DisplayLayout.originsMakingMain(mac, all: [mac, tv]), [CGPoint(x: 0, y: 0), CGPoint(x: 1728, y: -200)])
+    }
 }
