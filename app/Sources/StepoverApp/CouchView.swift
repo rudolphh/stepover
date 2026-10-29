@@ -273,7 +273,7 @@ struct CouchView: View {
                 .accessibilityLabel(store.controllerName.map { "\($0) connected" } ?? "No controller")
             TimelineView(.everyMinute) { context in Text(context.date, format: .dateTime.hour().minute()) }
         }
-        .font(.system(size: 22, weight: .medium))
+        .font(.system(size: 20, weight: .medium))
         .foregroundStyle(.white.opacity(0.88))
     }
 
@@ -281,13 +281,13 @@ struct CouchView: View {
     @ViewBuilder private func title(_ game: LibraryGame) -> some View {
         if let id = game.steamAppID, let logo = store.logo[id] {
             Image(nsImage: logo).resizable().scaledToFit()
-                .frame(maxWidth: 600, maxHeight: 200, alignment: .bottomLeading)
-                .frame(height: 200, alignment: .bottomLeading)
+                .frame(maxWidth: 520, maxHeight: 170, alignment: .bottomLeading)
+                .frame(height: 170, alignment: .bottomLeading)
                 .accessibilityLabel(game.name)
                 .accessibilityAddTraits(.isHeader)
         } else {
             Text(game.name)
-                .font(.system(size: 72, weight: .bold).width(.expanded))
+                .font(.system(size: 58, weight: .bold).width(.expanded))
                 .lineLimit(2).minimumScaleFactor(0.5)
                 .accessibilityAddTraits(.isHeader)
         }
@@ -299,18 +299,18 @@ struct CouchView: View {
         let verdict = Verdicts.play(game.entry)
         let (answer, qualifier) = Verdicts.parts(verdict.headline)
         let blurb = game.steamAppID.flatMap { store.about[$0]?.blurb }
-        return VStack(alignment: .leading, spacing: 22) {
+        return VStack(alignment: .leading, spacing: 18) {
             title(game)
             if game.isSteamClient {
-                Text("Your Steam games show up here by themselves.").font(.system(size: 27)).foregroundStyle(.white.opacity(0.86))
+                Text("Your Steam games show up here by themselves.").font(.system(size: 23)).foregroundStyle(.white.opacity(0.86))
             } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 14) {
-                        Circle().fill(verdict.kind.tone.color(.dark)).frame(width: 14, height: 14).accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 12) {
+                        Circle().fill(verdict.kind.tone.color(.dark)).frame(width: 12, height: 12).accessibilityHidden(true)
                         Text(answer).fontWeight(.bold)
                         if let qualifier { Text(qualifier).foregroundStyle(.white.opacity(0.8)) }
                     }
-                    .font(.system(size: 31))
+                    .font(.system(size: 26))
                     .accessibilityElement(children: .combine)
                     Group {
                         if let controller = Verdicts.controller(game.entry) { Label(controller.rawValue, systemImage: "gamecontroller") }
@@ -318,34 +318,34 @@ struct CouchView: View {
                             Label(line, systemImage: line == Verdicts.fixLine ? "wrench.and.screwdriver" : "info.circle")
                         }
                     }
-                    .font(.system(size: 22))
+                    .font(.system(size: 20))
                     .foregroundStyle(.white.opacity(0.86))
                 }
             }
             if let blurb {
-                Text(blurb).font(.system(size: 27)).lineSpacing(6).lineLimit(2)
-                    .frame(maxWidth: 860, alignment: .leading)
+                Text(blurb).font(.system(size: 23)).lineSpacing(5).lineLimit(2)
+                    .frame(maxWidth: 780, alignment: .leading)
                     .foregroundStyle(.white.opacity(0.86))
             }
             if let job = game.install {
-                Text(job.stage.text).font(.system(size: 27, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
+                Text(job.stage.text).font(.system(size: 23, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
             }
             if store.hidden.contains(game.id) {
                 Label("Hidden. Y puts it back with your games.", systemImage: "eye.slash")
-                    .font(.system(size: 22)).foregroundStyle(.white.opacity(0.86))
+                    .font(.system(size: 20)).foregroundStyle(.white.opacity(0.86))
             }
-            HStack(spacing: 32) {
+            HStack(spacing: 28) {
                 if let job = game.install { installPrompt(job) } else { playPrompt(game) }
                 if store.runningGame?.id == game.id {
-                    Text("Running now").font(.system(size: 24, weight: .semibold)).foregroundStyle(.green)
+                    Text("Running now").font(.system(size: 21, weight: .semibold)).foregroundStyle(.green)
                 } else if let played = game.lastPlayed {
                     Text("Last played \(played, format: .relative(presentation: .named))")
-                        .font(.system(size: 24)).foregroundStyle(.white.opacity(0.8))
+                        .font(.system(size: 21)).foregroundStyle(.white.opacity(0.8))
                 }
             }
             .padding(.top, 6)
         }
-        .frame(maxWidth: 940, alignment: .leading)
+        .frame(maxWidth: 860, alignment: .leading)
     }
 
     /// What A does on a game on its way in, and B to remove a failed one; nothing to press while it installs.
@@ -359,12 +359,12 @@ struct CouchView: View {
             }
         }()
         if let label {
-            HStack(spacing: 16) {
-                Text("A").font(.system(size: 26, weight: .bold)).foregroundStyle(.white)
-                    .frame(width: 56, height: 56).background(Color(white: 0.07), in: Circle())
-                Text(label).font(.system(size: 32, weight: .bold)).foregroundStyle(Color(white: 0.07))
+            HStack(spacing: 14) {
+                Text("A").font(.system(size: 22, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 48, height: 48).background(Color(white: 0.07), in: Circle())
+                Text(label).font(.system(size: 27, weight: .bold)).foregroundStyle(Color(white: 0.07))
             }
-            .padding(.leading, 10).padding(.trailing, 40).frame(height: 76)
+            .padding(.leading, 8).padding(.trailing, 34).frame(height: 64)
             .background(.white, in: Capsule())
             .shadow(color: .black.opacity(0.45), radius: 18, y: 8)
             .onTapGesture { installAction(job, .a) }
@@ -387,15 +387,15 @@ struct CouchView: View {
         case .play: label = game.isSteamClient ? "Open Steam" : "Play"
         default: label = "Starting \(store.starting?.name ?? game.name)"; waiting = true   // A waits meanwhile
         }
-        return HStack(spacing: 16) {
+        return HStack(spacing: 14) {
             Group {
-                if waiting { ProgressView().controlSize(.regular) } else { Text("A").font(.system(size: 26, weight: .bold)) }
+                if waiting { ProgressView().controlSize(.regular) } else { Text("A").font(.system(size: 22, weight: .bold)) }
             }
             .foregroundStyle(.white)
-            .frame(width: 56, height: 56).background(Color(white: 0.07), in: Circle())
-            Text(label).font(.system(size: 32, weight: .bold)).foregroundStyle(Color(white: 0.07))
+            .frame(width: 48, height: 48).background(Color(white: 0.07), in: Circle())
+            Text(label).font(.system(size: 27, weight: .bold)).foregroundStyle(Color(white: 0.07))
         }
-        .padding(.leading, 10).padding(.trailing, 40).frame(height: 76)
+        .padding(.leading, 8).padding(.trailing, 34).frame(height: 64)
         .background(.white, in: Capsule())
         .shadow(color: .black.opacity(0.45), radius: 18, y: 8)
         .onTapGesture { primary(game) }
@@ -407,11 +407,11 @@ struct CouchView: View {
     private var rowView: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .bottom, spacing: 28) {
+                HStack(alignment: .bottom, spacing: 32) {
                     ForEach(Array(games.enumerated()), id: \.element.id) { at, game in
                         let isSelected = at == index
                         CoverView(game: game)
-                            .frame(width: isSelected ? 180 : 144)
+                            .frame(width: isSelected ? 240 : 196)
                             .padding(5)
                             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .strokeBorder(isSelected ? Color.white : .clear, lineWidth: 4))
@@ -430,7 +430,7 @@ struct CouchView: View {
                 if games.indices.contains(at) { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(games[at].id, anchor: .center) } }
             }
         }
-        .frame(height: 320)
+        .frame(height: 400)
     }
 
     private var hints: some View {
@@ -440,16 +440,16 @@ struct CouchView: View {
             hint("Menu", "Options")
             Spacer()
             Text("In a game, hold Select + Start for a second to come back here")
-                .font(.system(size: 22, weight: .medium)).foregroundStyle(.white.opacity(0.82))
+                .font(.system(size: 20, weight: .medium)).foregroundStyle(.white.opacity(0.82))
         }
     }
 
     private func hint(_ button: String, _ word: String?) -> some View {
-        HStack(spacing: 12) {
-            Text(button).font(.system(size: button.count > 1 ? 18 : 19, weight: .bold))
-                .padding(.horizontal, button.count > 1 ? 14 : 0).frame(minWidth: 36, minHeight: 36)
+        HStack(spacing: 10) {
+            Text(button).font(.system(size: button.count > 1 ? 16 : 17, weight: .bold))
+                .padding(.horizontal, button.count > 1 ? 12 : 0).frame(minWidth: 32, minHeight: 32)
                 .background(.white.opacity(0.18), in: Capsule())
-            if let word { Text(word).font(.system(size: 22, weight: .medium)) }
+            if let word { Text(word).font(.system(size: 20, weight: .medium)) }
         }
         .foregroundStyle(.white.opacity(0.88))
         .accessibilityElement(children: .ignore)
