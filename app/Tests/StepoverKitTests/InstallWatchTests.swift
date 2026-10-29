@@ -27,6 +27,13 @@ final class InstallWatchTests: XCTestCase {
         XCTAssertEqual(watch.step(sample(4, processes: [process(10, setup), process(42, #"C:\x\DXSETUP.exe"#)])), [.end([42])])
     }
 
+    func testDirectXWebSetupHelperEnded() {
+        // dxwebsetup.exe unpacks dxwsetup.exe into %TEMP%\IXP000.TMP; ending only the parent left it running (Castlevania, 2026-10-29)
+        var watch = InstallWatch(kind: .inno, visible: false)
+        XCTAssertEqual(watch.step(sample(0, processes: [process(10, setup), process(50, #"C:\users\crossover\AppData\Local\Temp\IXP000.TMP\dxwsetup.exe"#)])),
+                       [.end([50])])
+    }
+
     func testLargeAddressFixForInnoOnly() {
         var inno = InstallWatch(kind: .inno, visible: false)
         let running = [process(10, setup), process(7, setupTmp)]

@@ -29,7 +29,7 @@ public struct InstallWatch: Sendable {
     public static let floor: Int64 = 5_000_000_000, resumeAt: Int64 = 10_000_000_000
     public static let idleLimit = 600.0, busyLimit = 1_800.0, idleCPU = 0.02
     /// Steps installers start that hang under Wine; Stepover supplies what they would install (D6).
-    public static let hangProne = ["dxwebsetup.exe", "dxsetup.exe", "vc_redist*.exe", "vcredist*.exe", "quicksfv.exe",
+    public static let hangProne = ["dxwebsetup.exe", "dxwsetup.exe", "dxsetup.exe", "vc_redist*.exe", "vcredist*.exe", "quicksfv.exe",
                                    "ue4prereqsetup*.exe", "ueprereqsetup*.exe"]
 
     let kind: InstallerKind
