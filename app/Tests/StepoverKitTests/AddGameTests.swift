@@ -90,6 +90,12 @@ final class AddGameTests: XCTestCase {
         XCTAssertEqual(AddGame.asciiDir(#"C:\Games\Pokémon ゲーム"#), #"C:\Games\Pokemon"#)
     }
 
+    func testInstallersRunQuietAndOffline() {
+        // no web page on the Mac, and no installer music: Wine's audio driver is off while an installer runs (games keep it)
+        let overrides = Set((AddGame.installEnv["WINEDLLOVERRIDES"] ?? "").split(separator: ";").map(String.init))
+        XCTAssertEqual(overrides, ["winebrowser.exe=d", "winecoreaudio.drv=d"])
+    }
+
     func testInnoErrorLine() {
         let log = """
         2026-10-29 12:55:03.300   Dest filename: C:\\Games\\Tiny Game\\TinyGame.exe

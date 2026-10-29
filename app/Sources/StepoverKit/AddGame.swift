@@ -275,7 +275,9 @@ public enum AddGame {
 
     // MARK: running one installer
 
-    static let installEnv = ["WINEDLLOVERRIDES": "winebrowser.exe=d"]   // no installer opens a page on the Mac (D5)
+    /// While an installer runs: no web page opens on the Mac (D5), and no installer music plays (Wine's audio driver is
+    /// off for the installer's processes only; the game later starts with its sound).
+    static let installEnv = ["WINEDLLOVERRIDES": "winebrowser.exe=d;winecoreaudio.drv=d"]
 
     /// Runs one installer unattended and watches it (InstallWatch) until it and everything it started have ended.
     static func runInstaller(_ installer: Installer, bottle: Bottle, dir: String, dirMac: URL, source: URL,

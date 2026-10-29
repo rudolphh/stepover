@@ -109,7 +109,8 @@ in couch mode's Menu > Add a Game, or passed to `stepover add`, goes through `Ad
 - **Running the installer** unattended: Inno Setup with `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR=… /LOG=…`,
   NSIS with `/S /D=…` through a one-line batch file (NSIS needs `/D=` raw, and Wine would quote it), MSI with `/qn`;
   anything else runs with its window ("The installer needs you"). The game goes to `C:\Games\<Game>`. Nothing is
-  written into the dropped folder, and `winebrowser.exe` is off so no installer opens a web page on the Mac.
+  written into the dropped folder; `winebrowser.exe` is off so no installer opens a web page on the Mac, and Wine's
+  audio driver is off while it runs, so installer music stays quiet (the game keeps its sound).
 - **The watcher** (`InstallWatch`, every half second, sizes every 10 s) looks at the bottle's processes and the
   installer's own (which run in the installer's folder, outside the bottle):
   - redistributable installers and checksum tools that hang under Wine (`dxwebsetup.exe`, `vc_redist*.exe`,
