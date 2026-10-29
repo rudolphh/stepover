@@ -55,6 +55,23 @@ cat > "$STAGE/Contents/Info.plist" <<EOF
   <key>LSApplicationCategoryType</key><string>public.app-category.games</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>StepoverSourceURL</key><string>$SOURCE_URL</string>
+  <!-- a game's installer or folder dropped on the Dock icon; rank None: never the app that opens these files -->
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key><string>Game installer or folder</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>None</string>
+      <key>LSItemContentTypes</key>
+      <array><string>public.folder</string><string>com.microsoft.windows-executable</string><string>public.iso-image</string></array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>Windows Installer package</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>None</string>
+      <key>CFBundleTypeExtensions</key><array><string>msi</string></array>
+    </dict>
+  </array>
 $([ -n "$SPONSOR_URL" ] && echo "  <key>StepoverSponsorURL</key><string>$SPONSOR_URL</string>")
 </dict>
 </plist>

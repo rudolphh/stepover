@@ -21,11 +21,12 @@ struct LibraryView: View {
                 ContentUnavailableView {
                     Label("No games yet", systemImage: "gamecontroller")
                 } description: {
-                    Text("Install a Windows game, or bring your games over from CrossOver.")
+                    Text("Drag a game's installer or folder here")
                 } actions: {
                     VStack(spacing: 12) {
                         HStack {
-                            Button("New Bottle…") { showCreate = true }.buttonStyle(.borderedProminent)
+                            Button("Add Game from Installer or Folder…") { store.chooseToAdd() }.buttonStyle(.borderedProminent)
+                            Button("New Bottle…") { showCreate = true }
                             if store.hasCrossOver { Button("Import from CrossOver…") { showImport = true } }
                         }
                         .disabled(!store.runtimeReady)
@@ -223,6 +224,7 @@ struct GameTile: View {
                     } else {
                         VerdictPill(text: verdict.kind.short, tone: verdict.kind.tone)
                     }
+                    if let job = game.install { InstallLine(job: job) }
                     if store.hidden.contains(game.id) { Text("Hidden").font(.caption2).foregroundStyle(.tertiary) }
                 }
                 .padding(.horizontal, 4)
@@ -233,6 +235,17 @@ struct GameTile: View {
         .onHover { over in withAnimation(.easeOut(duration: 0.15)) { hovering = over } }
         .simultaneousGesture(TapGesture(count: 2).onEnded { store.playGame(game) })
         .contextMenu {
+            if let job = game.install {
+                if job.isFailed { Button("Try Again") { store.tryAgain(job) } }
+                Button("Details") { store.showInstallLog(job) }
+                Button("Remove") { store.removeInstall(job) }.disabled(job.stage.isActive)
+            } else {
+                gameMenu
+            }
+        }
+    }
+
+    @ViewBuilder private var gameMenu: some View {
             Button("Play") { store.playGame(game) }.disabled(!store.runtimeReady)
             Button("Settings") { store.openSettings(game) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([folder(of: game)]) }
@@ -242,7 +255,6 @@ struct GameTile: View {
             } else {
                 Button("Hide from Library") { store.setHidden(game, true) }
             }
-        }
     }
 
     private func folder(of game: LibraryGame) -> URL {
@@ -309,9 +321,20 @@ struct HeroView: View {
                         }
                     }
                 }
-                HStack(spacing: 10) {
-                    PlayButton(game: game).keyboardShortcut(.defaultAction)   // Return plays the selected game
-                    Button("Settings") { store.openSettings(game) }.controlSize(.large)
+                if let job = game.install {
+                    InstallControls(job: job)
+                } else {
+                    HStack(spacing: 10) {
+                        PlayButton(game: game).keyboardShortcut(.defaultAction)   // Return plays the selected game
+                        Button("Settings") { store.openSettings(game) }.controlSize(.large)
+                    }
+                    if let offer = store.trashOffers[game.bottle.name] {
+                        HStack(spacing: 10) {
+                            Text(offer).font(.callout.weight(.medium))
+                            Button("Move to Trash") { store.moveSourceToTrash(bottle: game.bottle.name) }
+                            Button("Keep") { store.keepSource(bottle: game.bottle.name) }
+                        }
+                    }
                 }
                 if !game.isSteamClient && !(verdict.extra.isEmpty && verdict.reasons.isEmpty) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -344,4 +367,63 @@ struct HeroView: View {
         }
         .environment(\.colorScheme, .dark)
     }
+}
+
+/// What a game on its way in is doing, under its tile: plain words, and a spinner while Stepover works on it.
+struct InstallLine: View {
+    @Environment(\.colorScheme) private var scheme
+    let job: InstallJob
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            if job.stage.isActive { ProgressView().controlSize(.mini) }
+            Text(job.stage.text)
+                .font(.caption)
+                .foregroundStyle(job.isFailed ? TileTone.caution.color(scheme) : .secondary)
+                .lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// The hero's buttons for a game on its way in (spec D3, D9).
+struct InstallControls: View {
+    @EnvironmentObject var store: Store
+    let job: InstallJob
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                if job.stage.isActive { ProgressView().controlSize(.small) }
+                Text(job.stage.text).font(.title3.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 10) {
+                switch job.stage {
+                case .confirm:
+                    Button("Install Anyway") { store.installAnyway(job) }.buttonStyle(.borderedProminent).controlSize(.large)
+                    remove
+                case .alreadyInLibrary(let id):
+                    Button("Play") { store.playExisting(id) }.buttonStyle(.borderedProminent).controlSize(.large)
+                    Button("Install Again") { store.installAnyway(job) }.controlSize(.large)
+                    remove
+                case .failed(.noGame):
+                    Button("Choose the Game…") { store.chooseGame(job) }.buttonStyle(.borderedProminent).controlSize(.large)
+                    Button("Try Again") { store.tryAgain(job) }.controlSize(.large)
+                    remove
+                    details
+                case .failed:
+                    Button("Try Again") { store.tryAgain(job) }.buttonStyle(.borderedProminent).controlSize(.large)
+                    remove
+                    details
+                case .waiting:
+                    remove
+                default:
+                    details
+                }
+            }
+        }
+    }
+
+    private var remove: some View { Button("Remove") { store.removeInstall(job) }.controlSize(.large) }
+    private var details: some View { Button("Details") { store.showInstallLog(job) }.controlSize(.large) }
 }

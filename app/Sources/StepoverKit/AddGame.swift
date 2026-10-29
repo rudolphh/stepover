@@ -450,7 +450,8 @@ public enum AddGame {
 
     // MARK: disk
 
-    static func size(of folder: URL) -> Int64 {
+    /// Bytes in a folder and everything in it.
+    public static func size(of folder: URL) -> Int64 {
         GameFolder.files(in: folder, levels: .max).reduce(0) {
             $0 + Int64((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
         }

@@ -32,6 +32,8 @@ struct StepoverApp: App {
                 Divider()
             }
             CommandGroup(after: .newItem) {
+                Button("Add Game from Installer or Folder…") { store.chooseToAdd() }.keyboardShortcut("o")
+                Divider()
                 Button("Reload Bottles") { store.reload(); store.refreshIndex() }.keyboardShortcut("r")
                 Button("Wine Runtimes…") { store.refreshIndex(); store.showRuntimes = true }
             }
@@ -68,6 +70,11 @@ struct RootView: View {
         }
         .sheet(isPresented: $store.showFixSources) { FixSourcesSheet() }
         .sheet(isPresented: $store.showRuntimes) { RuntimesView() }
+        // drag a game's installer or folder onto the window (spec D1)
+        .dropDestination(for: URL.self) { urls, _ in
+            store.add(urls.filter(\.isFileURL))
+            return urls.contains(where: \.isFileURL)
+        }
     }
 }
 

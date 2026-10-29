@@ -70,19 +70,28 @@ final class Store: ObservableObject {
     /// Open in couch mode when a controller is connected at launch (on unless switched off).
     var openInCouchMode: Bool { UserDefaults.standard.object(forKey: "openInCouchMode") as? Bool ?? true }
     private let launched = Date()
-    private var gamesList: GamesList
-    private var gameIndex: GameIndex
+    var gamesList: GamesList
+    var gameIndex: GameIndex
     private var artRequested: Set<Int> = []
     /// Installed games the list doesn't know, looked up once on Steam's store from this Mac (LearnedGames).
-    private var learned = LearnedGames.load()
+    var learned = LearnedGames.load()
     private var lookingUp = false
-    private var lookupStopped = false   // Steam couldn't be reached this launch
+    var lookupStopped = false   // Steam couldn't be reached this launch
     var gamesCredits: [String] { gamesList.credits }
+    // MARK: Adding games from an installer or folder (spec: 2026-10-29-add-game-from-folder-design.md)
+    /// The shared queue (installs.json): games on their way in, and finished ones still owed the Trash offer.
+    @Published var installs: [InstallJob] = []
+    /// The job this process is installing now (one at a time, D10).
+    var installingJob: String?
+    /// The Trash offer by bottle name, once a game from a dropped folder has had a good run (D13).
+    @Published var trashOffers: [String: String] = [:]
+    var playSavedAt = Date()
 
     init() {
         let list = GamesList.load()
         gamesList = list
         gameIndex = GameIndex(list)
+        loadInstalls()
         reload()
         Task { _ = await FixLibrary.update(); refreshFixes() }  // quietly; offline just keeps the last copy
         refreshIndex()
@@ -175,7 +184,7 @@ final class Store: ObservableObject {
     func rebuildLibrary() {
         library = Library.games(bottles: bottles.map { (bottle: $0, config: config($0)) },
                                 steamApps: { SteamLibrary.apps(in: $0) }, index: gameIndex, recent: RecentGames.load(),
-                                learned: learned.index)
+                                learned: learned.index, installs: installs)
         loadArt()
         loadCouchLook()
         lookUpUnknownGames()
@@ -199,7 +208,7 @@ final class Store: ObservableObject {
         }
     }
 
-    private func applyLearned(_ latest: LearnedGames) {
+    func applyLearned(_ latest: LearnedGames) {
         learned = latest
         try? latest.save()
         rebuildLibrary()
@@ -259,7 +268,7 @@ final class Store: ObservableObject {
     }
 
     func playGame(_ game: LibraryGame) {
-        guard runtimeReady else { return }   // also covers double-click while the first download runs
+        guard runtimeReady, game.install == nil else { return }   // also covers double-click while the first download runs
         starting = game
         work(nil, "Starting \(game.name)", {
             do { try Launcher.run(game.launch, in: game.bottle) } catch {
@@ -316,6 +325,7 @@ final class Store: ObservableObject {
 
     /// Settings on a tile: the game's bottle page, this time only.
     func openSettings(_ game: LibraryGame) {
+        guard FileManager.default.fileExists(atPath: game.bottle.url.path) else { return }
         selection = game.bottle.id
         showBottles = true
     }
@@ -367,6 +377,7 @@ final class Store: ObservableObject {
         }
         let now = Set(bottles.filter(\.isRunning).map(\.id))
         if now != running { running = now }
+        trackPlay()
         // the running game matters to couch mode and, with a controller on, to the in-game panel
         if couchMode || controllerName != nil || runningGame != nil || starting != nil { updateRunningGame() }
     }
@@ -542,6 +553,7 @@ final class Store: ObservableObject {
                     Task { @MainActor in self.runtimeProgress = fraction }
                 }
                 runtimeReady = true
+                startNextInstall()   // games dropped before the runtime arrived
             } catch {
                 // the first download says so in the Library's toolbar, with Retry; later ones keep the alert
                 if first { runtimeFailed = true } else { alert = "Installing the Wine runtime failed: \(error.localizedDescription)" }

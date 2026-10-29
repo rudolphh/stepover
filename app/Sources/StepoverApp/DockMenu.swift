@@ -3,10 +3,32 @@ import StepoverKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    weak var store: Store?
+    weak var store: Store? {
+        didSet { if let store, !pendingOpen.isEmpty { store.add(pendingOpen); pendingOpen = [] } }
+    }
+    /// Items dropped on the Dock icon before the window (and its store) was up.
+    private var pendingOpen: [URL] = []
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         store.map(DockMenu.make)
+    }
+
+    /// A game's installer or folder dropped on Stepover's Dock icon (spec D1).
+    func application(_ application: NSApplication, open urls: [URL]) {
+        if let store { store.add(urls) } else { pendingOpen += urls }
+    }
+
+    /// Quitting while a game installs asks first; the install then stops and reads Interrupted (spec D10).
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let store, let id = store.installingJob, let job = store.installs.first(where: { $0.id == id }) else { return .terminateNow }
+        let alert = NSAlert()
+        alert.messageText = "A game is installing"
+        alert.informativeText = "Quit anyway? Installing \(job.name) stops, and Try Again starts it over."
+        alert.addButton(withTitle: "Quit")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
+        store.stopInstallForQuit()
+        return .terminateNow
     }
 }
 
