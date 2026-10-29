@@ -8,7 +8,8 @@ import SwiftUI
 struct CouchView: View {
     @EnvironmentObject var store: Store
     @StateObject private var input = ControllerBridge()
-    @State private var index = 0
+    @State private var focus: String?   // the selected game's id: playing a game moves it, and focus goes along
+    @State private var place = 0        // where focus was, for when its game is hidden
     @State private var showWhy = false
     @State private var menu: Int?
     @State private var confirm: Confirm?
@@ -22,16 +23,26 @@ struct CouchView: View {
     }
 
     private var games: [LibraryGame] { store.library.filter { store.showHidden || !store.hidden.contains($0.id) } }
+    private var index: Int { CouchRow(ids: games.map(\.id), focus: focus, fallback: place).index }
     private var selected: LibraryGame? { games.indices.contains(index) ? games[index] : games.first }
 
-    private var menuItems: [(title: String, action: () -> Void)] {
-        var items: [(String, () -> Void)] = []
-        if let screen, !isMain(screen) { items.append(("Make This the Main Display", { store.makeMainDisplay(screen); self.screen = screen })) }
-        items.append(("Leave Couch Mode", { store.couchMode = false }))
-        items.append((store.showHidden ? "Hide Hidden Games" : "Show Hidden Games", { store.showHidden.toggle() }))
-        if let running = store.runningGame { items.append(("Stop Everything", { store.quitGame(running) })) }
-        if !store.runtimeReady && store.runtimeFailed { items.append(("Retry Download", { store.installRuntime() })) }
-        items.append((store.openAtLogin ? "Open at Login: On" : "Open at Login: Off", { store.setOpenAtLogin(!store.openAtLogin) }))
+    private func select(_ at: Int) {
+        guard games.indices.contains(at) else { return }
+        focus = games[at].id
+        place = at
+    }
+
+    /// The Menu's choices; `detail` shows under a choice while it's highlighted, for ones the title doesn't explain.
+    private var menuItems: [(title: String, detail: String?, action: () -> Void)] {
+        var items: [(String, String?, () -> Void)] = []
+        if let screen, !isMain(screen) { items.append(("Make This the Main Display", nil, { store.makeMainDisplay(screen); self.screen = screen })) }
+        items.append(("Leave Couch Mode", nil, { store.couchMode = false }))
+        items.append((store.showHidden ? "Hide Hidden Games" : "Show Hidden Games", nil, { store.showHidden.toggle() }))
+        if let running = store.runningGame { items.append(("Stop Everything", nil, { store.quitGame(running) })) }
+        if !store.runtimeReady && store.runtimeFailed { items.append(("Retry Download", nil, { store.installRuntime() })) }
+        items.append((store.openAtLogin ? "Open at Login: On" : "Open at Login: Off",
+                      "Opens Stepover when you log in to this Mac, so couch mode is ready without the mouse.",
+                      { store.setOpenAtLogin(!store.openAtLogin) }))
         return items
     }
 
@@ -66,6 +77,7 @@ struct CouchView: View {
             input.onPress = { handle($0) }
             input.start()
             store.updateRunningGame()
+            if let ended = store.endedGame { focus = ended.id }
             setFullScreen(true)
         }
         .onDisappear {
@@ -73,7 +85,7 @@ struct CouchView: View {
             setFullScreen(false)
         }
         .onChange(of: store.endedGame) { _, ended in
-            if let ended, let at = games.firstIndex(where: { $0.id == ended.id }) { index = at }
+            if let ended { focus = ended.id }
         }
     }
 
@@ -99,8 +111,8 @@ struct CouchView: View {
         if showWhy { if button == .b || button == .x { showWhy = false }; return }
         var row = CouchRow(count: games.count, index: index)
         switch button {
-        case .left: row.move(-1); index = row.index
-        case .right: row.move(1); index = row.index
+        case .left: row.move(-1); select(row.index)
+        case .right: row.move(1); select(row.index)
         case .a: if let game = selected { primary(game) }
         case .x: showWhy = selected != nil
         case .y: if let game = selected { confirm = .hide(game) }
@@ -110,7 +122,7 @@ struct CouchView: View {
     }
 
     private func primary(_ game: LibraryGame) {
-        switch Couch.primary(selected: game.id, running: store.runningGame?.id) {
+        switch Couch.primary(selected: game.id, running: store.runningGame?.id, starting: store.starting?.id) {
         case .play: store.playGame(game)
         case .resume: if let running = store.runningGame { store.resume(running) }
         case .quitAndPlay: if let running = store.runningGame { confirm = .quitAndPlay(running: running, next: game) }
@@ -120,7 +132,7 @@ struct CouchView: View {
 
     private func perform(_ pending: Confirm) {
         switch pending {
-        case .hide(let game): store.setHidden(game, true); index = min(index, max(games.count - 1, 0))
+        case .hide(let game): place = index; store.setHidden(game, true)   // focus lands on the game that takes its place
         case .quitAndPlay(let running, let next): store.quitGame(running) { store.playGame(next) }
         }
     }
@@ -143,13 +155,15 @@ struct CouchView: View {
     // MARK: pieces
 
     private var backdrop: some View {
-        ZStack {
-            Color(nsColor: selected.flatMap { $0.steamAppID }.flatMap { store.tint[$0] } ?? NSColor(white: 0.12, alpha: 1))
-            if let id = selected?.steamAppID, let image = store.art[id] {
-                Image(nsImage: image).resizable().scaledToFill().blur(radius: 70).opacity(0.55)
+        Color(nsColor: selected.flatMap { $0.steamAppID }.flatMap { store.tint[$0] } ?? NSColor(white: 0.12, alpha: 1))
+            .overlay {
+                // an overlay never sizes what it sits on: a portrait cover filling the screen as a ZStack layer
+                // made the whole screen taller than the display and pushed the row and hints off it
+                if let id = selected?.steamAppID, let image = store.art[id] {
+                    Image(nsImage: image).resizable().scaledToFill().blur(radius: 70).opacity(0.55)
+                }
             }
-            LinearGradient(colors: [.black.opacity(0.35), .black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
-        }
+            .overlay { LinearGradient(colors: [.black.opacity(0.35), .black.opacity(0.85)], startPoint: .top, endPoint: .bottom) }
         .ignoresSafeArea()
         .clipped()
         .accessibilityHidden(true)
@@ -190,11 +204,50 @@ struct CouchView: View {
                             .background(.white.opacity(0.1), in: Capsule())
                     }
                 }
+                // the facts behind the answer, so the TV says why without opening Why (X shows them all)
+                let facts = verdict.extra + verdict.reasons.map { $0.text + ($0.source.map { "  (\($0))" } ?? "") }
+                if !facts.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(facts.prefix(3).enumerated()), id: \.offset) { _, fact in Text(fact).lineLimit(1) }
+                    }
+                    .font(.system(size: 22)).foregroundStyle(.white.opacity(0.85))
+                }
             }
             if store.runningGame?.id == game.id {
-                Text("Running now. A brings it back.").font(.system(size: 24, weight: .semibold)).foregroundStyle(.green)
+                Text("Running now").font(.system(size: 24, weight: .semibold)).foregroundStyle(.green)
+            } else if let played = game.lastPlayed {
+                Text("Last played \(played, format: .relative(presentation: .named))")
+                    .font(.system(size: 22)).foregroundStyle(.white.opacity(0.85))
             }
+            playPrompt(game).padding(.top, 10)
         }
+    }
+
+    /// What A does on the selected game, as the screen's one big button.
+    private func playPrompt(_ game: LibraryGame) -> some View {
+        let label: String
+        var waiting = false
+        switch Couch.primary(selected: game.id, running: store.runningGame?.id, starting: store.starting?.id) {
+        case .resume: label = "Resume"
+        case .quitAndPlay: label = "Quit \(store.runningGame?.name ?? "the game") and Play"
+        case .play: label = game.isSteamClient ? "Open Steam" : "Play"
+        default: label = "Starting \(store.starting?.name ?? game.name)"; waiting = true   // A waits meanwhile
+        }
+        return HStack(spacing: 14) {
+            Group {
+                if waiting { ProgressView().controlSize(.small) } else { Text("A").font(.system(size: 24, weight: .bold)) }
+            }
+            .foregroundStyle(.white)
+            .frame(width: 48, height: 48).background(.black.opacity(0.75), in: Circle())
+            Text(label).font(.system(size: 28, weight: .bold)).foregroundStyle(.black)
+        }
+        .padding(.leading, 8).padding(.trailing, 36).padding(.vertical, 8)
+        .background(.white, in: Capsule())
+        .shadow(color: .black.opacity(0.4), radius: 16, y: 6)
+        .onTapGesture { primary(game) }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(waiting ? label : "A \(label)")
+        .accessibilityAddTraits(.isButton)
     }
 
     private var rowView: some View {
@@ -216,7 +269,7 @@ struct CouchView: View {
                         }
                         .id(game.id)
                         .animation(.easeOut(duration: 0.18), value: index)
-                        .onTapGesture { index = at }
+                        .onTapGesture { select(at) }
                     }
                 }
                 .padding(.horizontal, 72)
@@ -230,8 +283,10 @@ struct CouchView: View {
 
     private var hints: some View {
         HStack(spacing: 34) {
-            hint("A", "Play"); hint("X", "Why"); hint("Y", "Hide"); hint("Menu", nil)
+            hint("X", "Why"); hint("Y", "Hide"); hint("Menu", "Options")
             Spacer()
+            Text("Hold Select + Start in a game to come back here")
+                .font(.system(size: 19, weight: .medium)).foregroundStyle(.white.opacity(0.85))
         }
     }
 
@@ -275,11 +330,16 @@ struct CouchView: View {
     private func menuPanel(_ at: Int) -> some View {
         overlay {
             ForEach(Array(menuItems.enumerated()), id: \.offset) { i, item in
-                Text(item.title)
-                    .font(.system(size: 28, weight: i == at ? .bold : .regular))
-                    .padding(.horizontal, 18).padding(.vertical, 10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(i == at ? Color.white.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 12))
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(item.title).font(.system(size: 28, weight: i == at ? .bold : .regular))
+                    if i == at, let detail = item.detail {
+                        Text(detail).font(.system(size: 20)).foregroundStyle(.white.opacity(0.85))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.horizontal, 18).padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(i == at ? Color.white.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 12))
             }
             Text("A Choose  B Close").font(.system(size: 18)).foregroundStyle(.secondary)
         }

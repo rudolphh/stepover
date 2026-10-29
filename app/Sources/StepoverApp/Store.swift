@@ -55,6 +55,11 @@ final class Store: ObservableObject {
     @Published var runningGame: LibraryGame?
     /// A game that just ended while couch mode was on: couch mode comes back with it selected (C6).
     @Published var endedGame: LibraryGame?
+    /// A game started a moment ago that isn't running yet: couch mode says so and A waits (C7). Cleared when it
+    /// runs, when starting it fails, or after a minute.
+    @Published var starting: LibraryGame?
+    /// Resume and Quit Game over a running game, from the controller (C5).
+    private(set) lazy var inGame = InGamePanel(store: self)
     /// Open in couch mode when a controller is connected at launch (on unless switched off).
     var openInCouchMode: Bool { UserDefaults.standard.object(forKey: "openInCouchMode") as? Bool ?? true }
     private let launched = Date()
@@ -223,7 +228,17 @@ final class Store: ObservableObject {
 
     func playGame(_ game: LibraryGame) {
         guard runtimeReady else { return }   // also covers double-click while the first download runs
-        work(nil, "Starting \(game.name)", { try Launcher.run(game.launch, in: game.bottle) }, then: { self.rebuildLibrary() })
+        starting = game
+        work(nil, "Starting \(game.name)", {
+            do { try Launcher.run(game.launch, in: game.bottle) } catch {
+                Task { @MainActor in self.starting = nil }
+                throw error
+            }
+        }, then: { self.rebuildLibrary() })
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(60))
+            if self?.starting?.id == game.id { self?.starting = nil }
+        }
     }
 
     func setHidden(_ game: LibraryGame, _ hide: Bool) {
@@ -279,16 +294,27 @@ final class Store: ObservableObject {
     func refreshRunning() {
         let now = Set(bottles.filter(\.isRunning).map(\.id))
         if now != running { running = now }
-        if couchMode { updateRunningGame() }
+        // the running game matters to couch mode and, with a controller on, to the in-game panel
+        if couchMode || controllerName != nil || runningGame != nil || starting != nil { updateRunningGame() }
     }
 
     func updateRunningGame() {
         let current = Couch.running(library, processes: RunningPrograms.processes())
-        if let previous = runningGame, current == nil {
-            endedGame = previous
-            NSApp.activate()
-        }
+        if let previous = runningGame, current == nil, couchMode { comeBack(after: previous) }
         if current?.id != runningGame?.id { runningGame = current }
+        if let current, current.id == starting?.id { starting = nil }
+        inGame.watch(current)
+    }
+
+    /// Couch mode in front again after a game (C6), with that game selected; reopens the window if it was closed.
+    func comeBack(after game: LibraryGame) {
+        endedGame = game
+        couchMode = true
+        if !NSApp.windows.contains(where: { $0.isVisible && $0.canBecomeMain }) {
+            // opening a running app is a reopen, which SwiftUI answers with a new window when none is open
+            NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: NSWorkspace.OpenConfiguration())
+        }
+        NSApp.activate()
     }
 
     /// Resume: the running game back in front (as the Dock menu's Bring to Front does).

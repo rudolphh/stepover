@@ -41,6 +41,22 @@ final class CouchTests: XCTestCase {
         XCTAssertEqual(Couch.primary(selected: "a", running: "b"), .quitAndPlay(running: "b"))
     }
 
+    // the hands-on test: Play moved Red Dead to the front of the row and the highlight stayed behind
+    func testFocusFollowsTheGame() {
+        XCTAssertEqual(CouchRow(ids: ["rdr2", "hifi", "iajc"], focus: "rdr2", fallback: 2).index, 0)
+        // hidden, so gone from the row: the game that took its place
+        XCTAssertEqual(CouchRow(ids: ["hifi", "iajc"], focus: "sainthood", fallback: 1).index, 1)
+        XCTAssertEqual(CouchRow(ids: ["hifi"], focus: "sainthood", fallback: 3).index, 0)
+        XCTAssertEqual(CouchRow(ids: ["hifi", "iajc"], focus: nil, fallback: 0).index, 0)
+    }
+
+    // a game takes seconds to show up; a second A meanwhile would start another copy
+    func testAWaitsWhileAGameStarts() {
+        XCTAssertEqual(Couch.primary(selected: "rdr2", running: nil, starting: "rdr2"), .none)
+        XCTAssertEqual(Couch.primary(selected: "hifi", running: nil, starting: "rdr2"), .none)
+        XCTAssertEqual(Couch.primary(selected: "rdr2", running: "rdr2", starting: "rdr2"), .resume)
+    }
+
     // Task 3: which game is running, and quitting just it
     private var dir: URL!
 
@@ -91,5 +107,33 @@ final class CouchTests: XCTestCase {
         let mac = CGRect(x: 0, y: 0, width: 1728, height: 1117), tv = CGRect(x: 1728, y: -200, width: 3840, height: 2160)
         XCTAssertEqual(DisplayLayout.originsMakingMain(tv, all: [mac, tv]), [CGPoint(x: -1728, y: 200), CGPoint(x: 0, y: 0)])
         XCTAssertEqual(DisplayLayout.originsMakingMain(mac, all: [mac, tv]), [CGPoint(x: 0, y: 0), CGPoint(x: 1728, y: -200)])
+    }
+
+    // Task 5: presses count only while Stepover is in front, and a button held across coming back doesn't
+    func testPressesOnlyWhileInFront() {
+        var t = PressTracker()
+        XCTAssertEqual(t.update([.a], at: 0, active: true), [.a])
+        XCTAssertEqual(t.update([.a], at: 0.5, active: true), [])            // held: once
+        XCTAssertEqual(t.update([], at: 0.6, active: true), [])
+        XCTAssertEqual(t.update([.a], at: 1, active: false), [])             // a game has the controller
+        XCTAssertEqual(t.update([.a], at: 1.1, active: true), [])            // still held on coming back
+        XCTAssertEqual(t.update([], at: 1.2, active: true), [])
+        XCTAssertEqual(t.update([.a], at: 1.3, active: true), [.a])
+        XCTAssertEqual(t.update([.right], at: 2, active: true), [.right])
+        XCTAssertEqual(t.update([.right], at: 2.64, active: true), [.right, .right])   // CouchRow.repeats' pace
+        XCTAssertEqual(t.update([.right], at: 3, active: false), [])
+    }
+
+    // Task 5: the in-game panel: A or B resumes, X asks, then A quits and B goes back
+    func testInGameMenu() {
+        var m = InGameMenu()
+        XCTAssertEqual(m.press(.a), .resume)
+        XCTAssertEqual(m.press(.b), .resume)
+        XCTAssertEqual(m.press(.y), .none)
+        XCTAssertEqual(m.press(.x), .none); XCTAssertTrue(m.confirming)
+        XCTAssertEqual(m.press(.x), .none); XCTAssertTrue(m.confirming)
+        XCTAssertEqual(m.press(.b), .none); XCTAssertFalse(m.confirming)
+        XCTAssertEqual(m.press(.x), .none)
+        XCTAssertEqual(m.press(.a), .quit)
     }
 }

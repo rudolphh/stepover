@@ -3,6 +3,8 @@
 //   axdump <pid>                      prints each window's text: role, then title | value | description
 //   axdump <pid> - "<text>"           presses the button or menu item whose text is <text> or starts with "<text>,"
 //   axdump <pid> key <code>           sends one key press (virtual key code) to the app
+//   axdump <pid> visible "<text>"     exits 0 when the element with that text lies inside its window (layout that
+//                                     overflows the window still shows up in the tree, so reading it isn't enough)
 // Disabled controls end with " (disabled)". Sheets and dialogs are searched before the window under them.
 import ApplicationServices
 import Foundation
@@ -49,6 +51,30 @@ if CommandLine.arguments.count > 3, CommandLine.arguments[2] == "key", let code 
     }
     print(">>> key \(code)")
     exit(0)
+}
+func frame(_ e: AXUIElement) -> CGRect? {
+    guard let p = attr(e, kAXPositionAttribute), let s = attr(e, kAXSizeAttribute) else { return nil }
+    var point = CGPoint.zero, size = CGSize.zero
+    AXValueGetValue(p as! AXValue, .cgPoint, &point)
+    AXValueGetValue(s as! AXValue, .cgSize, &size)
+    return CGRect(origin: point, size: size)
+}
+func find(_ e: AXUIElement, _ wanted: String) -> AXUIElement? {
+    let t = text(e)
+    if t == wanted || t.hasPrefix(wanted + ",") { return e }
+    for c in children(e) { if let hit = find(c, wanted) { return hit } }
+    return nil
+}
+if CommandLine.arguments.count > 3, CommandLine.arguments[2] == "visible" {
+    let wanted = CommandLine.arguments[3]
+    for w in windows {
+        guard let hit = find(w, wanted), let f = frame(hit), let wf = frame(w) else { continue }
+        let inside = wf.insetBy(dx: -1, dy: -1).contains(f)
+        print("\(inside ? "visible" : "outside"): \(wanted) at \(f) in window \(wf)")
+        exit(inside ? 0 : 1)
+    }
+    print("!!! nothing named \(wanted)")
+    exit(1)
 }
 if press != nil {
     for w in windows { for sheet in sheets(w) where press != nil { _ = findPress(sheet) } }

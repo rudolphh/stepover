@@ -26,7 +26,8 @@ STEPOVER_APP="$APP" STEPOVER_BIN=none STEPOVER_BUNDLE_ID=io.github.rudolphh.step
 home=$SCRATCH/home
 mkdir -p "$home/Bottles" "$home/Runtimes"
 find "$REAL/Bottles" "$REAL/Runtimes" -mindepth 1 -maxdepth 1 -type d | while read -r d; do cp -cR "$d" "$home/${${d:h}:t}/"; done
-cp "$REAL/recent.json" "$home/" 2>/dev/null
+cp "$REAL/recent.json" "$REAL/learned-games.json" "$home/" 2>/dev/null   # learned: no Steam lookups, covers at once
+[ -d "$REAL/Art" ] && cp -cR "$REAL/Art" "$home/"   # covers change the layout (they once pushed the row off screen)
 order=(${(f)"$(/usr/bin/python3 -I -c 'import json,sys;[print(e["program"]) for e in sorted(json.load(open(sys.argv[1])), key=lambda e: -e["played"])]' "$home/recent.json" 2>/dev/null)"})
 
 quit_test
@@ -34,14 +35,21 @@ open -n --env STEPOVER_HOME="$home" --env STEPOVER_GAMES_LIST="$GAMES" "$APP"
 for i in {1..30}; do pid=$(pgrep -f "Stepover Test.app/Contents/MacOS/Stepover" | head -1); [ -n "$pid" ] && "$AX" "$pid" 2>/dev/null | grep -q "== window" && break; sleep 0.5; done
 sleep 2
 osascript -e 'tell application id "io.github.rudolphh.stepover.test" to activate' 2>/dev/null
-"$AX" "$pid" - "Couch Mode" >/dev/null; sleep 3
-dump=$("$AX" "$pid")
+"$AX" "$pid" - "Couch Mode" >/dev/null
+# going full screen takes a Space animation, during which the window reads empty
+for i in {1..20}; do dump=$("$AX" "$pid"); print -r -- "$dump" | grep -q "A Play" && break; sleep 0.5; done
+sleep 1; dump=$("$AX" "$pid")
 check "couch mode shows the button hints" 'print -r -- "$dump" | grep -q "A Play" && print -r -- "$dump" | grep -q "X Why"'
+check "the hints are on screen" '"$AX" "$pid" visible "A Play"'
+check "the shortcut line is on screen" '"$AX" "$pid" visible "Hold Select + Start in a game to come back here"'
 check "the last played game is selected" 'print -r -- "$dump" | grep -q "AXHeading: ${order[1]}"'
 "$AX" "$pid" key 124 >/dev/null; sleep 1
 check "Right selects the next game" '"$AX" "$pid" | grep -q "AXHeading: ${order[2]}"'
 "$AX" "$pid" key 48 >/dev/null; sleep 1
 check "Menu offers Leave Couch Mode" '"$AX" "$pid" | grep -q "Leave Couch Mode"'
+"$AX" "$pid" key 125 >/dev/null; "$AX" "$pid" key 125 >/dev/null; sleep 1   # Down twice: Open at Login
+check "Open at Login says what it does" '"$AX" "$pid" visible "Opens Stepover when you log in to this Mac, so couch mode is ready without the mouse."'
+"$AX" "$pid" key 126 >/dev/null; "$AX" "$pid" key 126 >/dev/null; sleep 1   # back up to Leave Couch Mode
 "$AX" "$pid" key 36 >/dev/null; sleep 2
 check "Leave Couch Mode returns to the Library" '"$AX" "$pid" | grep -q "Your games"'
 exit $failed

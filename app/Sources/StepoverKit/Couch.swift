@@ -14,6 +14,12 @@ public struct CouchRow: Sendable {
         self.index = count == 0 ? 0 : min(max(index, 0), count - 1)
     }
 
+    /// Focus on the game `focus` wherever the row put it (playing a game moves it to the front); when it's gone
+    /// (hidden), on the game that took its place, `fallback`.
+    public init(ids: [String], focus: String?, fallback: Int) {
+        self.init(count: ids.count, index: focus.flatMap { ids.firstIndex(of: $0) } ?? fallback)
+    }
+
     public mutating func move(_ step: Int) {
         guard count > 0 else { return }
         index = min(max(index + step, 0), count - 1)
@@ -47,12 +53,60 @@ public struct ShortcutDetector: Sendable {
     }
 }
 
+/// Turns the controller's pressed buttons, read every few milliseconds, into presses: each newly pressed button
+/// once, and a held direction again at CouchRow.repeats' pace. While Stepover isn't in front (a game has the
+/// controller) nothing counts, and a button still held when Stepover comes back doesn't count until let go.
+public struct PressTracker: Sendable {
+    private var held: Set<CouchButton> = []
+    private var since: [CouchButton: Double] = [:]
+    private var sent: [CouchButton: Int] = [:]
+
+    public init() {}
+
+    public mutating func update(_ pressed: Set<CouchButton>, at time: Double, active: Bool) -> [CouchButton] {
+        defer { held = pressed }
+        guard active else { since = [:]; sent = [:]; return [] }
+        var out: [CouchButton] = []
+        for button in pressed.subtracting(held) { since[button] = time; sent[button] = 1; out.append(button) }
+        for button in held.subtracting(pressed) { since[button] = nil; sent[button] = nil }
+        for button in pressed.intersection([.up, .down, .left, .right]) {
+            guard let start = since[button] else { continue }
+            let due = CouchRow.repeats(heldFor: time - start)
+            while (sent[button] ?? 1) < due { sent[button, default: 1] += 1; out.append(button) }
+        }
+        return out
+    }
+}
+
+public enum InGameOutcome: Equatable, Sendable { case none, resume, quit }
+
+/// The in-game panel (C5): A or B resumes the game; X asks before quitting, then A quits and B goes back.
+public struct InGameMenu: Equatable, Sendable {
+    public private(set) var confirming = false
+
+    public init() {}
+
+    public mutating func press(_ button: CouchButton) -> InGameOutcome {
+        if confirming {
+            if button == .a { return .quit }
+            if button == .b { confirming = false }
+            return .none
+        }
+        switch button {
+        case .a, .b: return .resume
+        case .x: confirming = true; return .none
+        default: return .none
+        }
+    }
+}
+
 public enum CouchAction: Equatable, Sendable { case play, resume, quitAndPlay(running: String), why, hide, back, menu, none }
 
 public enum Couch {
-    /// What A does on `selected` while `running` (a LibraryGame id) is running.
-    public static func primary(selected: String, running: String?) -> CouchAction {
-        guard let running else { return .play }
+    /// What A does on `selected` while `running` (a LibraryGame id) is running. While `starting` is on its way
+    /// (started, not running yet), A waits: another press would start a second game.
+    public static func primary(selected: String, running: String?, starting: String? = nil) -> CouchAction {
+        guard let running else { return starting == nil ? .play : .none }
         return running == selected ? .resume : .quitAndPlay(running: running)
     }
 }
