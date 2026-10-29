@@ -76,7 +76,8 @@ public struct InstallWatch: Sendable {
             return actions
         }
 
-        if let last = growth, sample.written <= last.written {
+        // any change counts: repack installers delete what they unpacked from, so the folder can shrink while working
+        if let last = growth, sample.written == last.written {
             let flat = sample.time - last.time
             let rate = flat > 0 ? (sample.cpuSeconds - last.cpu) / flat : 0
             if !visible, !stuckSaid, flat >= Self.busyLimit || (flat >= Self.idleLimit && rate < Self.idleCPU) {

@@ -60,6 +60,15 @@ final class InstallWatchTests: XCTestCase {
         XCTAssertEqual(growing.step(sample(1_199, written: 200)), [.stuck])
     }
 
+    func testShrinkingCountsAsProgress() {
+        // repack installers unpack into the game folder and then delete what they unpacked from: the size goes down
+        var watch = InstallWatch(kind: .inno, visible: false)
+        _ = watch.step(sample(0, written: 2_700))
+        XCTAssertEqual(watch.step(sample(500, written: 2_200)), [])
+        XCTAssertEqual(watch.step(sample(1_000, written: 2_200)), [])      // 500 s since it last changed, not 1,000
+        XCTAssertEqual(watch.step(sample(1_100, written: 2_200)), [.stuck])
+    }
+
     func testStuckBusy() {
         var watch = InstallWatch(kind: .inno, visible: false)
         _ = watch.step(sample(0))
