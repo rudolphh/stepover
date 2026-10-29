@@ -37,7 +37,10 @@ extension Store {
     /// Dropped on the window or the Dock icon, chosen in File > Add Game from Installer or Folder…, or picked in couch
     /// mode: each item becomes a tile at once, then installs in turn.
     func add(_ urls: [URL]) {
-        for url in urls.map(\.standardizedFileURL) {
+        let now = Date()
+        recentlyAdded = recentlyAdded.filter { now.timeIntervalSince($0.value) < 2 }
+        for url in urls.map(\.standardizedFileURL) where recentlyAdded[url.path] == nil {
+            recentlyAdded[url.path] = now
             let plan = GameFolder.plan(for: url)
             let failure: InstallFailure?
             switch plan {
@@ -117,6 +120,9 @@ extension Store {
                     self.setStage(job.id, .failed((error as? AddGameError)?.failure ?? .installerError(error.localizedDescription)))
                 }
                 self.reload()
+                if case .success(let done) = result {
+                    self.justAdded = "\(Paths.bottles.appendingPathComponent(name).path)|\(done.program.name)"
+                }
                 self.startNextInstall()
             }
         }

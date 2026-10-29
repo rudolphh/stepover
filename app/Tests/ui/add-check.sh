@@ -27,7 +27,7 @@ launch() { # starts the test copy on the scratch home and waits for its window; 
     local games=()
     [ -n "$GAMES" ] && games=(--env STEPOVER_GAMES_LIST="$GAMES")
     open -n --env STEPOVER_HOME="$HOMEDIR" --env STEPOVER_RUNTIMES="$RUNTIMES" --env STEPOVER_LOGS="$HOMEDIR/logs" \
-        --env STEPOVER_NO_CONTROLLER=1 $games "$APP"
+        --env STEPOVER_NO_CONTROLLER=1 $games "$APP" --args -ApplePersistenceIgnoreState YES   # no windows restored from earlier runs
     for i in {1..30}; do
         pid=$(pgrep -f "Stepover Add Check.app/Contents/MacOS/Stepover" | head -1)
         [ -n "$pid" ] && "$AX" "$pid" 2>/dev/null | grep -q "== window" && break
@@ -68,14 +68,14 @@ launch
 check "an empty Library says to drag a game in" 'seen 5 "Drag a game.s installer or folder here"'
 check "an empty Library offers Add Game from Installer or Folder" 'seen 1 "AXButton: Add Game from Installer or Folder"'
 
-open -a "$APP" "$FIX/Tiny NSIS Game"
-check "a dropped folder shows up at once, installing" 'seen 20 "Waiting to install|Getting ready|Installing"'
-check "it becomes the game (installs.json: done)" 'done_within 300 "Tiny NSIS Game"'
-check "and Play is there" 'seen 10 "AXButton: Play"'
-
 open -a "$APP" "$FIX/Empty"
 check "an empty folder says so" 'seen 20 "This folder doesn.t have an installer or a game in it."'
 check "with Try Again" 'seen 5 "AXButton: Try Again"'
+
+open -a "$APP" "$FIX/Tiny NSIS Game"
+check "a dropped folder shows up at once, installing" 'seen 20 "Waiting to install|Getting ready|Installing"'
+check "it becomes the game (installs.json: done)" 'done_within 300 "Tiny NSIS Game"'
+check "and the finished game is selected, with Play" 'seen 10 "AXButton: Play" && "$AX" "$pid" | grep -B3 "AXButton: Play" | grep -q "Tiny NSIS Game"'
 open -a "$APP" "$FIX/tiny.zip"
 check "an archive says so" 'seen 20 "Unpack it first, then drag in the folder."'
 
@@ -83,7 +83,8 @@ open -a "$APP" "$FIX/Tiny GOG"
 open -a "$APP" "$FIX/Tiny GOG"
 sleep 3
 check "the same folder twice is one tile" '[[ "$(stage_of "Tiny GOG")" == 1* ]]'
-check "opening folders the Dock's way keeps one window" '[[ $("$AX" "$pid" | grep -c "== window") -eq 1 ]]'
+windows() { osascript -e "tell application \"System Events\" to count windows of (first process whose unix id is $pid)"; }
+check "opening folders the Dock's way keeps one window" '[[ $(windows) -eq 1 ]] || { windows; "$AX" "$pid" | grep "== window"; false; }'
 check "it installs" 'seen 30 "Getting ready|Installing"'
 launch   # quit mid-install (as a crash would) and open again
 check "an install cut short says Interrupted" 'seen 10 "Interrupted"'

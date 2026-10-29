@@ -85,6 +85,10 @@ final class Store: ObservableObject {
     var installingJob: String?
     /// The Trash offer by bottle name, once a game from a dropped folder has had a good run (D13).
     @Published var trashOffers: [String: String] = [:]
+    /// The tile of the game that just finished installing: the Library and couch mode select it ("come back to a Play button").
+    @Published var justAdded: String?
+    /// When each item was last handed to add(): the Dock's open can arrive twice (window and app delegate).
+    var recentlyAdded: [String: Date] = [:]
     var playSavedAt = Date()
 
     init() {

@@ -61,6 +61,7 @@ struct LibraryView: View {
             }
         }
         .navigationTitle("Library")
+        .onChange(of: store.justAdded) { _, id in if let id { selection = id } }
         .sheet(isPresented: $showImport) { ImportSheet() }
         .sheet(isPresented: $showCreate) { CreateSheet() }
     }

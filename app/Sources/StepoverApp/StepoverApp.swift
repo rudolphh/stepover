@@ -18,6 +18,8 @@ struct StepoverApp: App {
                     Button("OK") { store.alert = nil }
                 } message: { Text(store.alert ?? "") }
         }
+        // installers and folders opened from the Dock go to the window that's open (onOpenURL), never a new one
+        .handlesExternalEvents(matching: ["*"])
         .commands {
             CommandGroup(before: .toolbar) {
                 Toggle("Couch Mode", isOn: Binding(get: { store.couchMode }, set: { store.couchMode = $0 }))
@@ -70,6 +72,8 @@ struct RootView: View {
         }
         .sheet(isPresented: $store.showFixSources) { FixSourcesSheet() }
         .sheet(isPresented: $store.showRuntimes) { RuntimesView() }
+        .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
+        .onOpenURL { url in if url.isFileURL { store.add([url]) } }
         // drag a game's installer or folder onto the window (spec D1)
         .dropDestination(for: URL.self) { urls, _ in
             store.add(urls.filter(\.isFileURL))
