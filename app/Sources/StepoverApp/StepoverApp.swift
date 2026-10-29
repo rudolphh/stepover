@@ -31,6 +31,8 @@ struct StepoverApp: App {
                 Button("Bottles") { store.setView(bottles: true) }.keyboardShortcut("2")
                 Toggle("Show Hidden Games", isOn: Binding(get: { store.showHidden }, set: { store.showHidden = $0 }))
                 Toggle("Look Up Unknown Games on Steam", isOn: Binding(get: { store.lookUpUnknown }, set: { store.lookUpUnknown = $0 }))
+                Button(store.downloadsAllowed ? "Couch Mode Sees Downloads" : "Let Couch Mode See Downloads") { store.allowDownloads() }
+                    .disabled(store.downloadsAllowed)
                 Divider()
             }
             CommandGroup(after: .newItem) {

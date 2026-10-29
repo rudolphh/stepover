@@ -32,6 +32,8 @@ public enum Paths {
     public static var fixes: URL { url("STEPOVER_FIXES", default: root.appendingPathComponent("Fixes")) }
     /// STEPOVER_LOGS, default ~/Library/Logs/Stepover
     public static var logs: URL { url("STEPOVER_LOGS", default: home.appendingPathComponent("Library/Logs/Stepover")) }
+    /// STEPOVER_DOWNLOADS, default ~/Downloads: where couch mode's Menu > Add a Game looks for games
+    public static var downloads: URL { url("STEPOVER_DOWNLOADS", default: home.appendingPathComponent("Downloads")) }
     /// STEPOVER_LAUNCHERS, default ~/Applications/Stepover (the per-game Mac apps)
     public static var launchers: URL { url("STEPOVER_LAUNCHERS", default: home.appendingPathComponent("Applications/Stepover")) }
     /// STEPOVER_CROSSOVER_BOTTLES, default ~/Library/Application Support/CrossOver/Bottles

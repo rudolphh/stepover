@@ -183,6 +183,24 @@ extension Store {
         setStage(id, .failed(.interrupted))
     }
 
+    // MARK: couch mode's Menu > Add a Game (D12)
+
+    /// macOS guards Downloads with a dialog that needs a mouse, so couch mode lists it only once the player has let
+    /// Stepover see it at the Mac (View > Let Couch Mode See Downloads).
+    var downloadsAllowed: Bool { UserDefaults.standard.bool(forKey: "downloadsAllowed") }
+
+    /// View > Let Couch Mode See Downloads: reading the folder once is what makes macOS ask, here at the Mac.
+    func allowDownloads() {
+        do {
+            _ = try FileManager.default.contentsOfDirectory(atPath: Paths.downloads.path)
+            UserDefaults.standard.set(true, forKey: "downloadsAllowed")
+            objectWillChange.send()
+            alert = "Couch mode can now list the games in your Downloads folder: Menu > Add a Game."
+        } catch {
+            alert = "Stepover can't see your Downloads folder: \(error.localizedDescription)"
+        }
+    }
+
     // MARK: the Trash offer (D13)
 
     /// Every 2 s with the running check: time played counts for games added from a folder whose offer is pending.

@@ -16,11 +16,23 @@ struct CouchView: View {
     @State private var confirm: Confirm?
     @State private var enteredFullScreen = false
     @State private var screen: NSScreen?   // the screen couch mode is on
+    @State private var adding: [AddChoice]?   // Menu > Add a Game: the games waiting in Downloads
+    @State private var addAt = 0
     @FocusState private var focused: Bool
 
     enum Confirm: Equatable {
         case hide(LibraryGame)
         case quitAndPlay(running: LibraryGame, next: LibraryGame)
+        case trash(bottle: String, text: String)   // after a game from a dropped folder had a good run (D13)
+    }
+
+    /// A game waiting in Downloads, as Menu > Add a Game lists it.
+    struct AddChoice: Identifiable {
+        let url: URL
+        let name: String
+        let verdict: String
+        let there: Bool
+        var id: String { url.path }
     }
 
     private let macDelete = KeyEquivalent("\u{7F}")
@@ -48,6 +60,7 @@ struct CouchView: View {
         items.append((store.openAtLogin ? "Open at Login: On" : "Open at Login: Off",
                       "Opens Stepover when you log in to this Mac, so couch mode is ready without the mouse.",
                       { store.setOpenAtLogin(!store.openAtLogin) }))
+        items.append(("Add a Game", "Games waiting in your Downloads folder, from their installer or folder.", { openAddList() }))
         return items
     }
 
@@ -65,6 +78,7 @@ struct CouchView: View {
                 }
                 if showDetails, let game = selected { detailsPanel(game) }
                 if let menu { menuPanel(menu) }
+                if let adding { addPanel(adding) }
                 if let confirm { confirmPanel(confirm) }
                 if let message = store.alert { messagePanel(message) }
             }
@@ -92,8 +106,10 @@ struct CouchView: View {
             input.stop()
             setFullScreen(false)
         }
+        .onChange(of: store.justAdded) { _, id in if let id { focus = id } }   // the game that just finished installing
         .onChange(of: store.endedGame) { _, ended in
             if let ended { focus = ended.id }
+            if let ended, let text = store.trashOffers[ended.bottle.name] { confirm = .trash(bottle: ended.bottle.name, text: text) }
         }
     }
 
@@ -103,7 +119,18 @@ struct CouchView: View {
         if store.alert != nil { if button == .b || button == .a { store.alert = nil }; return }
         if let pending = confirm {
             if button == .a { perform(pending) }
+            if button == .b, case .trash(let bottle, _) = pending { store.keepSource(bottle: bottle) }
             if button == .a || button == .b { confirm = nil }
+            return
+        }
+        if let choices = adding {
+            switch button {
+            case .up: addAt = max(addAt - 1, 0)
+            case .down: addAt = min(addAt + 1, choices.count - 1)
+            case .a: if choices.indices.contains(addAt) { store.add([choices[addAt].url]) }; adding = nil
+            case .b, .menu: adding = nil
+            default: break
+            }
             return
         }
         if let at = menu {
@@ -122,6 +149,7 @@ struct CouchView: View {
         case .left: row.move(-1); select(row.index)
         case .right: row.move(1); select(row.index)
         case .a: if let game = selected { primary(game) }
+        case .b: if let job = selected?.install { installAction(job, .b) }
         case .x: showDetails = selected != nil
         case .y:
             guard let game = selected else { break }
@@ -131,7 +159,36 @@ struct CouchView: View {
         }
     }
 
+    /// A and B on a game on its way in (D12): Try Again or Remove a failure, Install Anyway, Play the copy already there.
+    private func installAction(_ job: InstallJob, _ button: CouchButton) {
+        switch Couch.installAction(job.stage, button: button) {
+        case .tryAgain: store.tryAgain(job)
+        case .removeInstall: store.removeInstall(job)
+        case .installAnyway: store.installAnyway(job)
+        case .playExisting(let id): focus = id; store.playExisting(id)
+        default: break
+        }
+    }
+
+    /// Menu > Add a Game: the games in Downloads, read off the main thread (looking at installers takes a moment).
+    private func openAddList() {
+        guard store.downloadsAllowed else { store.alert = "Allow Stepover to see your Downloads on the Mac first"; return }
+        let index = store.gameIndex, library = store.library
+        Task.detached {
+            let choices = DownloadsScan.candidates(in: Paths.downloads).map { url -> AddChoice in
+                let name = FolderName.clean(url.lastPathComponent)
+                let entry = index.match(name: name, exe: nil)
+                return AddChoice(url: url, name: entry?.name ?? name, verdict: Verdicts.play(entry).kind.short,
+                                 there: Recognize.existing(Recognized(name: entry?.name ?? name, entry: entry), in: library) != nil)
+            }
+            await MainActor.run {
+                if choices.isEmpty { store.alert = "No games in your Downloads folder yet." } else { addAt = 0; adding = choices }
+            }
+        }
+    }
+
     private func primary(_ game: LibraryGame) {
+        if let job = game.install { installAction(job, .a); return }
         switch Couch.primary(selected: game.id, running: store.runningGame?.id, starting: store.starting?.id) {
         case .play: store.playGame(game)
         case .resume: if let running = store.runningGame { store.resume(running) }
@@ -144,6 +201,7 @@ struct CouchView: View {
         switch pending {
         case .hide(let game): place = index; store.setHidden(game, true)   // focus lands on the game that takes its place
         case .quitAndPlay(let running, let next): store.quitGame(running) { store.playGame(next) }
+        case .trash(let bottle, _): store.moveSourceToTrash(bottle: bottle)
         }
     }
 
@@ -269,12 +327,15 @@ struct CouchView: View {
                     .frame(maxWidth: 860, alignment: .leading)
                     .foregroundStyle(.white.opacity(0.86))
             }
+            if let job = game.install {
+                Text(job.stage.text).font(.system(size: 27, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
+            }
             if store.hidden.contains(game.id) {
                 Label("Hidden. Y puts it back with your games.", systemImage: "eye.slash")
                     .font(.system(size: 22)).foregroundStyle(.white.opacity(0.86))
             }
             HStack(spacing: 32) {
-                playPrompt(game)
+                if let job = game.install { installPrompt(job) } else { playPrompt(game) }
                 if store.runningGame?.id == game.id {
                     Text("Running now").font(.system(size: 24, weight: .semibold)).foregroundStyle(.green)
                 } else if let played = game.lastPlayed {
@@ -285,6 +346,35 @@ struct CouchView: View {
             .padding(.top, 6)
         }
         .frame(maxWidth: 940, alignment: .leading)
+    }
+
+    /// What A does on a game on its way in, and B to remove a failed one; nothing to press while it installs.
+    @ViewBuilder private func installPrompt(_ job: InstallJob) -> some View {
+        let label: String? = {
+            switch Couch.installAction(job.stage, button: .a) {
+            case .tryAgain: return "Try Again"
+            case .installAnyway: return "Install Anyway"
+            case .playExisting: return "Play"
+            default: return nil
+            }
+        }()
+        if let label {
+            HStack(spacing: 16) {
+                Text("A").font(.system(size: 26, weight: .bold)).foregroundStyle(.white)
+                    .frame(width: 56, height: 56).background(Color(white: 0.07), in: Circle())
+                Text(label).font(.system(size: 32, weight: .bold)).foregroundStyle(Color(white: 0.07))
+            }
+            .padding(.leading, 10).padding(.trailing, 40).frame(height: 76)
+            .background(.white, in: Capsule())
+            .shadow(color: .black.opacity(0.45), radius: 18, y: 8)
+            .onTapGesture { installAction(job, .a) }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("A \(label)")
+            .accessibilityAddTraits(.isButton)
+            if Couch.installAction(job.stage, button: .b) == .removeInstall { hint("B", "Remove") }
+        } else if job.stage.isActive {
+            ProgressView().controlSize(.large).accessibilityLabel(job.stage.text)
+        }
     }
 
     /// What A does on the selected game, as the screen's one big button.
@@ -446,8 +536,32 @@ struct CouchView: View {
                 Text("To bring it back: Menu > Show Hidden Games, then Y on it.").font(.system(size: 22)).foregroundStyle(.secondary)
             case .quitAndPlay(let running, let next):
                 Text("Quit \(running.name) and play \(next.name)").font(.system(size: 34, weight: .bold))
+            case .trash(_, let text):
+                Text(text).font(.system(size: 34, weight: .bold)).fixedSize(horizontal: false, vertical: true)
             }
-            Text("A Confirm  B Cancel").font(.system(size: 18)).foregroundStyle(.secondary)
+            if case .trash = pending {
+                Text("A Move to Trash  B Keep").font(.system(size: 18)).foregroundStyle(.secondary)
+            } else {
+                Text("A Confirm  B Cancel").font(.system(size: 18)).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Menu > Add a Game: what's in Downloads, with the answer and whether it's already in the Library.
+    private func addPanel(_ choices: [AddChoice]) -> some View {
+        overlay {
+            Text("Add a Game").font(.system(size: 34, weight: .bold)).accessibilityAddTraits(.isHeader)
+            ForEach(Array(choices.enumerated()), id: \.element.id) { i, choice in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(choice.name).font(.system(size: 28, weight: i == addAt ? .bold : .regular))
+                    Text(choice.there ? "\(choice.verdict). Already in your Library" : choice.verdict)
+                        .font(.system(size: 20)).foregroundStyle(.white.opacity(0.8))
+                }
+                .padding(.horizontal, 18).padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(i == addAt ? Color.white.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 12))
+            }
+            Text("A Add  B Close").font(.system(size: 18)).foregroundStyle(.secondary)
         }
     }
 
