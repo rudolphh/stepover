@@ -100,6 +100,14 @@ public struct InGameMenu: Equatable, Sendable {
     }
 }
 
+/// A window as macOS's window list reports it (kCGWindowOwnerPID, kCGWindowLayer, kCGWindowBounds).
+public struct GameWindow: Equatable, Sendable {
+    public var pid: Int32, layer: Int, width: Double, height: Double
+    public init(pid: Int32, layer: Int, width: Double, height: Double) {
+        self.pid = pid; self.layer = layer; self.width = width; self.height = height
+    }
+}
+
 public enum CouchAction: Equatable, Sendable { case play, resume, quitAndPlay(running: String), why, hide, unhide, back, menu, none }
 
 public enum Couch {
@@ -108,6 +116,12 @@ public enum Couch {
     public static func primary(selected: String, running: String?, starting: String? = nil) -> CouchAction {
         guard let running else { return starting == nil ? .play : .none }
         return running == selected ? .resume : .quitAndPlay(running: running)
+    }
+
+    /// Whether one of `pids` has a window to show: a normal one (layer 0) at least 640 by 360, not Wine's
+    /// menu bar strip or the small window it opens first.
+    public static func hasGameWindow(pids: [Int32], windows: [GameWindow]) -> Bool {
+        windows.contains { pids.contains($0.pid) && $0.layer == 0 && $0.width >= 640 && $0.height >= 360 }
     }
 
     /// What Y does: hides the selected game (asking first), or puts a hidden one back (Show Hidden Games is

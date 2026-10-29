@@ -112,13 +112,17 @@ public enum Launcher {
         return status
     }
 
-    /// Stops every Wine process in the bottle.
+    /// Stops every Wine process in the bottle: its programs first, then its wineserver. wineserver -k alone asks
+    /// the server to end them and gives up on the server after 10 s, which left a hung or busy game running,
+    /// frozen, with no server (Hi Fi Rush and Red Dead, 2026-10-29).
     public static func stop(_ bottle: Bottle) throws {
+        let programs = RunningPrograms.inBottle(RunningPrograms.processes(), bottlePath: bottle.url.path)
+        for program in programs { kill(program.pid, SIGKILL) }
         let config = bottle.loadConfig()
         guard let runtime = bottle.runtime(config) else { return }
         let env = environment(bottle: bottle, config: config, runtime: runtime)
         let status = try spawn(runtime.wineserver.path, ["-k"], env: env, workdir: bottle.url, log: nil, detach: false, wait: true)
-        appendLog(bottle, "stopped the bottle (wineserver -k exited with \(status))")
+        appendLog(bottle, "stopped the bottle: ended \(programs.count) program(s), then wineserver -k exited with \(status)")
     }
 
     /// Imports a REGEDIT4 patch with regedit inside the bottle.

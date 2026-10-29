@@ -239,6 +239,32 @@ final class Store: ObservableObject {
             try? await Task.sleep(for: .seconds(60))
             if self?.starting?.id == game.id { self?.starting = nil }
         }
+        showWhenItOpens(game)
+    }
+
+    /// Brings a game Stepover just started in front once it has a window: macOS leaves one that opens on another
+    /// desktop, or behind couch mode's full screen, out of sight. Gives up after two minutes.
+    private func showWhenItOpens(_ game: LibraryGame) {
+        Task { [weak self] in
+            for _ in 0..<240 {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard self != nil else { return }
+                let pids = Couch.processes(of: game, in: RunningPrograms.processes()).map(\.pid)
+                if !pids.isEmpty, Couch.hasGameWindow(pids: pids, windows: Self.windows()) { DockMenu.bringToFront(pids); return }
+            }
+        }
+    }
+
+    private static func windows() -> [GameWindow] {
+        let list = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] ?? []
+        return list.compactMap { info in
+            guard let pid = (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
+                  let layer = (info[kCGWindowLayer as String] as? NSNumber)?.intValue,
+                  let bounds = info[kCGWindowBounds as String] as? [String: Any],
+                  let width = (bounds["Width"] as? NSNumber)?.doubleValue, let height = (bounds["Height"] as? NSNumber)?.doubleValue
+            else { return nil }
+            return GameWindow(pid: pid, layer: layer, width: width, height: height)
+        }
     }
 
     func setHidden(_ game: LibraryGame, _ hide: Bool) {

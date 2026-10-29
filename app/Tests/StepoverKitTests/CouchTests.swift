@@ -56,6 +56,17 @@ final class CouchTests: XCTestCase {
         XCTAssertEqual(Couch.secondary(hidden: true), .unhide)
     }
 
+    // the hands-on test: with several desktops (or couch mode's full screen) a started game opened out of sight
+    func testGameWindowWorthShowing() {
+        let strip = GameWindow(pid: 7, layer: 0, width: 1728, height: 33)     // Wine's menu bar strip
+        let helper = GameWindow(pid: 7, layer: 0, width: 500, height: 500)    // the hidden window Wine opens first
+        let other = GameWindow(pid: 9, layer: 0, width: 1728, height: 1080)
+        XCTAssertFalse(Couch.hasGameWindow(pids: [7], windows: [strip, helper, other]))
+        XCTAssertTrue(Couch.hasGameWindow(pids: [7], windows: [strip, GameWindow(pid: 7, layer: 0, width: 1728, height: 1080)]))
+        XCTAssertTrue(Couch.hasGameWindow(pids: [7], windows: [GameWindow(pid: 7, layer: 0, width: 800, height: 600)]))
+        XCTAssertFalse(Couch.hasGameWindow(pids: [7], windows: [GameWindow(pid: 7, layer: 25, width: 1728, height: 1080)]))
+    }
+
     // a game takes seconds to show up; a second A meanwhile would start another copy
     func testAWaitsWhileAGameStarts() {
         XCTAssertEqual(Couch.primary(selected: "rdr2", running: nil, starting: "rdr2"), .none)
