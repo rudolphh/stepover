@@ -61,6 +61,6 @@ final class DockTests: XCTestCase {
     }
 
     func testListingLiveProcessesDoesNotCrash() {
-        XCTAssertTrue(RunningPrograms.processes().allSatisfy { RunningPrograms.isWindowsPath($0.windowsPath) })
+        XCTAssertTrue(RunningPrograms.processes().allSatisfy { RunningPrograms.isProgramName($0.windowsPath) })
     }
 }

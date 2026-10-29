@@ -36,7 +36,7 @@ final class InGamePanel {
     }
 
     private func poll() {
-        let pressed = GCController.controllers().first?.extendedGamepad?.couchButtons ?? []
+        let pressed = GCController.couchPad?.couchButtons ?? []
         let now = Date().timeIntervalSinceReferenceDate
         let shortcut = detector.update(pressed, at: now)
         guard panel != nil else {

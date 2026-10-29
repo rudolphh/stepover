@@ -27,10 +27,18 @@ final class ControllerBridge: ObservableObject {
 
     /// Reads the first controller's buttons (polling keeps one code path for pressing and holding).
     private func poll() {
-        let pressed = GCController.controllers().first?.extendedGamepad?.couchButtons ?? []
+        let pressed = GCController.couchPad?.couchButtons ?? []
         for button in tracker.update(pressed, at: Date().timeIntervalSinceReferenceDate, active: NSApp.isActive) {
             onPress?(button)
         }
+    }
+}
+
+extension GCController {
+    /// The controller couch mode and the in-game panel read. None when STEPOVER_NO_CONTROLLER is set: the scripted
+    /// checks drive their test copies with the keyboard, and a controller in someone's hands must not press A there.
+    static var couchPad: GCExtendedGamepad? {
+        ProcessInfo.processInfo.environment["STEPOVER_NO_CONTROLLER"] == nil ? controllers().first?.extendedGamepad : nil
     }
 }
 

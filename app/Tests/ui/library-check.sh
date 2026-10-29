@@ -21,7 +21,7 @@ quit_test() { # waits until the test copy is gone, so the next launch is a fresh
 launch() { # launch <home> [env...]: starts the test copy on <home>, waits for its window; sets $pid
     local home=$1; shift
     quit_test
-    open -n --env STEPOVER_HOME="$home" --env STEPOVER_GAMES_LIST="$GAMES" "$@" "$APP"
+    open -n --env STEPOVER_HOME="$home" --env STEPOVER_GAMES_LIST="$GAMES" --env STEPOVER_NO_CONTROLLER=1 "$@" "$APP"
     for i in {1..30}; do
         pid=$(pgrep -f "Stepover Test.app/Contents/MacOS/Stepover" | head -1)
         [ -n "$pid" ] && "$AX" "$pid" 2>/dev/null | grep -q "== window" && break

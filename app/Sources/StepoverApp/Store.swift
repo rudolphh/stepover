@@ -324,7 +324,10 @@ final class Store: ObservableObject {
 
     /// Quit Game: just this game (a Steam game's own processes, else its bottle), then `then`.
     func quitGame(_ game: LibraryGame, then: (() -> Void)? = nil) {
-        switch Couch.quitPlan(game, processes: RunningPrograms.processes()) {
+        let plan = Couch.quitPlan(game, processes: RunningPrograms.processes())
+        if case .processes(let pids) = plan { Launcher.appendLog(game.bottle, "quitting \(game.name): ending \(pids)") }
+        else { Launcher.appendLog(game.bottle, "quitting \(game.name): stopping its bottle") }
+        switch plan {
         case .processes(let pids):
             for pid in pids { kill(pid, SIGTERM) }
             Task {

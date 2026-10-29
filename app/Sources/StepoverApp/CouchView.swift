@@ -22,6 +22,8 @@ struct CouchView: View {
         case quitAndPlay(running: LibraryGame, next: LibraryGame)
     }
 
+    private let macDelete = KeyEquivalent("\u{7F}")
+
     private var games: [LibraryGame] { store.library.filter { store.showHidden || !store.hidden.contains($0.id) } }
     private var index: Int { CouchRow(ids: games.map(\.id), focus: focus, fallback: place).index }
     private var selected: LibraryGame? { games.indices.contains(index) ? games[index] : games.first }
@@ -66,9 +68,10 @@ struct CouchView: View {
         .focusable()
         .focusEffectDisabled()
         .focused($focused)
-        .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow, .return, .escape, .space, .delete, .tab]) { press in
+        // a Mac's Delete key types U+007F, not SwiftUI's .delete (U+0008)
+        .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow, .return, .escape, .space, .delete, macDelete, .tab]) { press in
             let map: [KeyEquivalent: CouchButton] = [.leftArrow: .left, .rightArrow: .right, .upArrow: .up, .downArrow: .down,
-                                                     .return: .a, .escape: .b, .space: .x, .delete: .y, .tab: .menu]
+                                                     .return: .a, .escape: .b, .space: .x, .delete: .y, macDelete: .y, .tab: .menu]
             if let button = map[press.key] { handle(button) }
             return .handled
         }
@@ -115,7 +118,9 @@ struct CouchView: View {
         case .right: row.move(1); select(row.index)
         case .a: if let game = selected { primary(game) }
         case .x: showWhy = selected != nil
-        case .y: if let game = selected { confirm = .hide(game) }
+        case .y:
+            guard let game = selected else { break }
+            if Couch.secondary(hidden: store.hidden.contains(game.id)) == .unhide { store.setHidden(game, false) } else { confirm = .hide(game) }
         case .menu: menu = 0
         default: break
         }
@@ -213,6 +218,10 @@ struct CouchView: View {
                     .font(.system(size: 22)).foregroundStyle(.white.opacity(0.85))
                 }
             }
+            if store.hidden.contains(game.id) {
+                Label("Hidden. Y puts it back with your games.", systemImage: "eye.slash")
+                    .font(.system(size: 22)).foregroundStyle(.white.opacity(0.85))
+            }
             if store.runningGame?.id == game.id {
                 Text("Running now").font(.system(size: 24, weight: .semibold)).foregroundStyle(.green)
             } else if let played = game.lastPlayed {
@@ -283,9 +292,11 @@ struct CouchView: View {
 
     private var hints: some View {
         HStack(spacing: 34) {
-            hint("X", "Why"); hint("Y", "Hide"); hint("Menu", "Options")
+            hint("X", "Why")
+            hint("Y", selected.map { store.hidden.contains($0.id) } == true ? "Show in Library" : "Hide")
+            hint("Menu", "Options")
             Spacer()
-            Text("Hold Select + Start in a game to come back here")
+            Text("Hold Select + Start for a second in a game to come back here")
                 .font(.system(size: 19, weight: .medium)).foregroundStyle(.white.opacity(0.85))
         }
     }
@@ -350,7 +361,7 @@ struct CouchView: View {
             switch pending {
             case .hide(let game):
                 Text("Hide \(game.name)?").font(.system(size: 34, weight: .bold))
-                Text("Menu > Show Hidden Games brings it back.").font(.system(size: 22)).foregroundStyle(.secondary)
+                Text("To bring it back: Menu > Show Hidden Games, then Y on it.").font(.system(size: 22)).foregroundStyle(.secondary)
             case .quitAndPlay(let running, let next):
                 Text("Quit \(running.name) and play \(next.name)").font(.system(size: 34, weight: .bold))
             }

@@ -26,7 +26,7 @@ public enum RunningPrograms {
         var pids = [pid_t](repeating: 0, count: Int(count) + 64)
         let found = proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size))
         return pids.prefix(Int(max(found, 0))).compactMap { pid in
-            guard pid > 0, let name = firstArgument(pid), isWindowsPath(name), let cwd = workingDirectory(pid) else { return nil }
+            guard pid > 0, let name = firstArgument(pid), isProgramName(name), let cwd = workingDirectory(pid) else { return nil }
             return Process(pid: pid, windowsPath: name, cwd: cwd)
         }
     }
@@ -35,6 +35,12 @@ public enum RunningPrograms {
     public static func inBottle(_ processes: [Process], bottlePath: String) -> [Process] {
         let root = URL(fileURLWithPath: bottlePath).resolvingSymlinksInPath().path + "/"
         return processes.filter { $0.cwd.hasPrefix(root) }
+    }
+
+    /// A Windows path, or a bare exe name: a program started by name has no path (Rockstar's launcher starts
+    /// "RDR2.exe"). Its working directory still places it in a bottle.
+    static func isProgramName(_ s: String) -> Bool {
+        isWindowsPath(s) || (!s.contains("/") && s.lowercased().hasSuffix(".exe"))
     }
 
     static func isWindowsPath(_ s: String) -> Bool {

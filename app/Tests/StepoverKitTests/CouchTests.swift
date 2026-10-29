@@ -50,6 +50,12 @@ final class CouchTests: XCTestCase {
         XCTAssertEqual(CouchRow(ids: ["hifi", "iajc"], focus: nil, fallback: 0).index, 0)
     }
 
+    // the hands-on test: a game hidden from the couch had no way back with the controller
+    func testYHidesOrBringsBack() {
+        XCTAssertEqual(Couch.secondary(hidden: false), .hide)
+        XCTAssertEqual(Couch.secondary(hidden: true), .unhide)
+    }
+
     // a game takes seconds to show up; a second A meanwhile would start another copy
     func testAWaitsWhileAGameStarts() {
         XCTAssertEqual(Couch.primary(selected: "rdr2", running: nil, starting: "rdr2"), .none)
@@ -74,6 +80,28 @@ final class CouchTests: XCTestCase {
     }
 
     private func cwd(_ bottle: Bottle) -> String { bottle.url.resolvingSymlinksInPath().path + "/drive_c" }
+
+    // the hands-on test: RDR2.exe hands off to Launcher.exe and a second RDR2.exe named without a path, so Red Dead
+    // looked ended, couch mode came back over it, and the next A started a second copy
+    func testGameRunningAfterItsExeHandsOff() {
+        let rdr2 = bottle("RDR2")
+        let program = Program(name: "Red Dead Redemption 2", exe: #"C:\Program Files\Red Dead Redemption 2\RDR2.exe"#)
+        let tile = LibraryGame(id: "r|Red Dead Redemption 2", name: "Red Dead Redemption 2", bottle: rdr2, kind: .program(program),
+                               entry: nil, lastPlayed: nil, steamAppID: nil, launch: program)
+        let launcher = RunningPrograms.Process(pid: 1, windowsPath: #"C:\Program Files\Red Dead Redemption 2\Launcher.exe"#, cwd: cwd(rdr2))
+        let bare = RunningPrograms.Process(pid: 2, windowsPath: "RDR2.exe", cwd: cwd(rdr2))
+        XCTAssertEqual(Couch.running([tile], processes: [launcher])?.id, tile.id)
+        XCTAssertEqual(Couch.running([tile], processes: [bare])?.id, tile.id)
+        XCTAssertTrue(RunningPrograms.isProgramName("RDR2.exe"))
+        XCTAssertTrue(RunningPrograms.isProgramName(#"C:\Games\Sainthood\Sainthood.exe"#))
+        XCTAssertFalse(RunningPrograms.isProgramName("/usr/bin/zsh"))
+        XCTAssertFalse(RunningPrograms.isProgramName("zsh"))
+        // a game at a drive's root doesn't claim everything on that drive
+        let root = Program(name: "Root", exe: #"C:\game.exe"#)
+        let rootTile = LibraryGame(id: "r|Root", name: "Root", bottle: rdr2, kind: .program(root),
+                                   entry: nil, lastPlayed: nil, steamAppID: nil, launch: root)
+        XCTAssertNil(Couch.running([rootTile], processes: [launcher]))
+    }
 
     func testRunningGameAndQuitPlan() {
         let steam = bottle("Steam"), sainthood = bottle("Sainthood")

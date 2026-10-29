@@ -31,7 +31,7 @@ cp "$REAL/recent.json" "$REAL/learned-games.json" "$home/" 2>/dev/null   # learn
 order=(${(f)"$(/usr/bin/python3 -I -c 'import json,sys;[print(e["program"]) for e in sorted(json.load(open(sys.argv[1])), key=lambda e: -e["played"])]' "$home/recent.json" 2>/dev/null)"})
 
 quit_test
-open -n --env STEPOVER_HOME="$home" --env STEPOVER_GAMES_LIST="$GAMES" "$APP"
+open -n --env STEPOVER_HOME="$home" --env STEPOVER_GAMES_LIST="$GAMES" --env STEPOVER_NO_CONTROLLER=1 "$APP"
 for i in {1..30}; do pid=$(pgrep -f "Stepover Test.app/Contents/MacOS/Stepover" | head -1); [ -n "$pid" ] && "$AX" "$pid" 2>/dev/null | grep -q "== window" && break; sleep 0.5; done
 sleep 2
 osascript -e 'tell application id "io.github.rudolphh.stepover.test" to activate' 2>/dev/null
@@ -41,10 +41,19 @@ for i in {1..20}; do dump=$("$AX" "$pid"); print -r -- "$dump" | grep -q "A Play
 sleep 1; dump=$("$AX" "$pid")
 check "couch mode shows the button hints" 'print -r -- "$dump" | grep -q "A Play" && print -r -- "$dump" | grep -q "X Why"'
 check "the hints are on screen" '"$AX" "$pid" visible "A Play"'
-check "the shortcut line is on screen" '"$AX" "$pid" visible "Hold Select + Start in a game to come back here"'
+check "the shortcut line is on screen" '"$AX" "$pid" visible "Hold Select + Start for a second in a game to come back here"'
 check "the last played game is selected" 'print -r -- "$dump" | grep -q "AXHeading: ${order[1]}"'
 "$AX" "$pid" key 124 >/dev/null; sleep 1
 check "Right selects the next game" '"$AX" "$pid" | grep -q "AXHeading: ${order[2]}"'
+# hiding and the way back, all from the controller (Delete = Y)
+"$AX" "$pid" key 51 >/dev/null; sleep 1
+check "Y asks before hiding" '"$AX" "$pid" | grep -q "Hide ${order[2]}?"'
+"$AX" "$pid" key 36 >/dev/null; sleep 1
+check "the hidden game leaves the row" '! "$AX" "$pid" | grep -q "AXHeading: ${order[2]}"'
+"$AX" "$pid" key 48 >/dev/null; sleep 1; "$AX" "$pid" key 125 >/dev/null; sleep 0.5; "$AX" "$pid" key 36 >/dev/null; sleep 1   # Menu > Show Hidden Games
+check "with hidden games shown, Y offers to put it back" '"$AX" "$pid" | grep -q "AXHeading: ${order[2]}" && "$AX" "$pid" visible "Y Show in Library"'
+"$AX" "$pid" key 51 >/dev/null; sleep 1
+check "Y puts it back" '"$AX" "$pid" visible "Y Hide"'
 "$AX" "$pid" key 48 >/dev/null; sleep 1
 check "Menu offers Leave Couch Mode" '"$AX" "$pid" | grep -q "Leave Couch Mode"'
 "$AX" "$pid" key 125 >/dev/null; "$AX" "$pid" key 125 >/dev/null; sleep 1   # Down twice: Open at Login

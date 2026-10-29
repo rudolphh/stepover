@@ -117,7 +117,8 @@ public enum Launcher {
         let config = bottle.loadConfig()
         guard let runtime = bottle.runtime(config) else { return }
         let env = environment(bottle: bottle, config: config, runtime: runtime)
-        _ = try spawn(runtime.wineserver.path, ["-k"], env: env, workdir: bottle.url, log: nil, detach: false, wait: true)
+        let status = try spawn(runtime.wineserver.path, ["-k"], env: env, workdir: bottle.url, log: nil, detach: false, wait: true)
+        appendLog(bottle, "stopped the bottle (wineserver -k exited with \(status))")
     }
 
     /// Imports a REGEDIT4 patch with regedit inside the bottle.

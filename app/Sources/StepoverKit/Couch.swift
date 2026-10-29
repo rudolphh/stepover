@@ -100,7 +100,7 @@ public struct InGameMenu: Equatable, Sendable {
     }
 }
 
-public enum CouchAction: Equatable, Sendable { case play, resume, quitAndPlay(running: String), why, hide, back, menu, none }
+public enum CouchAction: Equatable, Sendable { case play, resume, quitAndPlay(running: String), why, hide, unhide, back, menu, none }
 
 public enum Couch {
     /// What A does on `selected` while `running` (a LibraryGame id) is running. While `starting` is on its way
@@ -109,6 +109,10 @@ public enum Couch {
         guard let running else { return starting == nil ? .play : .none }
         return running == selected ? .resume : .quitAndPlay(running: running)
     }
+
+    /// What Y does: hides the selected game (asking first), or puts a hidden one back (Show Hidden Games is
+    /// on), the only way back from the couch.
+    public static func secondary(hidden: Bool) -> CouchAction { hidden ? .unhide : .hide }
 }
 
 /// How to quit just one game: a Steam game's own processes (Steam keeps running and syncs its cloud saves),
@@ -135,8 +139,10 @@ extension Couch {
             let folder = app.windowsFolder.lowercased() + "\\"
             return inBottle.filter { $0.windowsPath.lowercased().hasPrefix(folder) }
         case .program(let program):
+            // its exe, or anything from its folder: a game can hand off to a launcher there and exit
             let exe = WindowsPath.fileName(program.exe).lowercased()
-            return inBottle.filter { $0.exeName == exe }
+            let folder = String(program.exe.lowercased().dropLast(exe.count))
+            return inBottle.filter { $0.exeName == exe || (folder.count > 3 && $0.windowsPath.lowercased().hasPrefix(folder)) }
         case .steamClient:
             return []
         }
