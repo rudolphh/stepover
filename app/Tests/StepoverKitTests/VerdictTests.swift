@@ -122,4 +122,13 @@ final class VerdictTests: XCTestCase {
         XCTAssertNil(Verdicts.controller(nil))
         XCTAssertEqual(Verdicts.controller(duckov, playedWithController: true), .yours)
     }
+
+    // couch mode sets a verdict's answer in bold and its qualifier lighter, keeping the Library's words
+    func testHeadlineParts() {
+        XCTAssertTrue(Verdicts.parts("Plays great (tested on Mac)") == ("Plays great", "tested on Mac"))
+        XCTAssertTrue(Verdicts.parts("Should play (works on Steam Deck, not tested on Mac yet)") == ("Should play", "works on Steam Deck, not tested on Mac yet"))
+        XCTAssertTrue(Verdicts.parts("Doesn't run on Mac yet") == ("Doesn't run on Mac yet", nil))
+        XCTAssertTrue(Verdicts.parts("Won't run: needs anti-cheat that doesn't work on Mac") == ("Won't run", "needs anti-cheat that doesn't work on Mac"))
+        XCTAssertTrue(Verdicts.parts("Not tested yet. Try it; Stepover will remember how it went.") == ("Not tested yet", "Try it; Stepover will remember how it went."))
+    }
 }

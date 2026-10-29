@@ -62,6 +62,77 @@ final class GameArtTests: XCTestCase {
         XCTAssertEqual(art?.lastPathComponent, "7.jpg")
     }
 
+    // Couch mode's look: the game's key art behind it and its logo as the title, cached like covers
+    func testKeyArtAndLogo() async throws {
+        XCTAssertEqual(GameArt.remoteURL(1174180, kind: .hero).absoluteString,
+                       "https://cdn.cloudflare.steamstatic.com/steam/apps/1174180/library_hero.jpg")
+        XCTAssertEqual(GameArt.remoteURL(1174180, kind: .logo).absoluteString,
+                       "https://cdn.cloudflare.steamstatic.com/steam/apps/1174180/logo.png")
+        let png = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A])
+        let hero = await GameArt.fetch(1174180, kind: .hero, into: cache, load: cdn([1174180: (200, jpeg)]))
+        XCTAssertEqual(hero?.lastPathComponent, "1174180-hero.jpg")
+        let logo = await GameArt.fetch(1174180, kind: .logo, into: cache, load: cdn([1174180: (200, png)]))
+        XCTAssertEqual(logo?.lastPathComponent, "1174180-logo.png")
+        XCTAssertEqual(GameArt.cached(1174180, kind: .logo, in: cache)?.lastPathComponent, "1174180-logo.png")
+        let notPNG = await GameArt.fetch(2, kind: .logo, into: cache, load: cdn([2: (200, jpeg)]))
+        XCTAssertNil(notPNG)
+        let none = await GameArt.fetch(3, kind: .hero, into: cache, load: cdn([3: (404, Data())]))
+        XCTAssertNil(none)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: cache.appendingPathComponent("3-hero.none").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cache.appendingPathComponent("3.none").path))   // the cover is still asked for
+    }
+
+    func testAboutTheGameFromSteam() async throws {
+        let hifi = Data(#"{"1817230":{"success":true,"data":{"type":"game","name":"Hi-Fi RUSH","short_description":"Test your abilities in two new game modes, uncover new rewards and even a few secrets in the Arcade Challenge! Update! Feel the beat as wannabe rockstar Chai and his ragtag team fight against an evil megacorp in a world that syncs to the music.","genres":[{"id":"1","description":"Action"}],"release_date":{"coming_soon":false,"date":"Jan 25, 2023"}}}}"#.utf8)
+        let about = try XCTUnwrap(SteamStore.about(appdetails: hifi, appID: 1817230))
+        XCTAssertEqual(about.blurb, "Feel the beat as wannabe rockstar Chai and his ragtag team fight against an evil megacorp in a world that syncs to the music.")
+        XCTAssertEqual(about.genres, ["Action"])
+        XCTAssertEqual(about.year, "2023")
+        let rdr2 = Data(#"{"1174180":{"success":true,"data":{"type":"game","name":"Red Dead Redemption 2","short_description":"Arthur Morgan and the Van der Linde Gang are outlaws on the run. With federal agents &amp; bounty hunters on their heels, the gang must &quot;survive&quot;.","genres":[{"id":"1","description":"Action"},{"id":"25","description":"Adventure"}],"release_date":{"date":"5 Dec, 2019"}}}}"#.utf8)
+        let red = try XCTUnwrap(SteamStore.about(appdetails: rdr2, appID: 1174180))
+        XCTAssertEqual(red.blurb, "Arthur Morgan and the Van der Linde Gang are outlaws on the run. With federal agents & bounty hunters on their heels, the gang must \"survive\".")
+        XCTAssertEqual(red.genres, ["Action", "Adventure"])
+        XCTAssertEqual(red.year, "2019")
+        XCTAssertNil(SteamStore.about(appdetails: Data(#"{"5":{"success":false}}"#.utf8), appID: 5))
+
+        // fetched once, then read from the cache; Steam having nothing is remembered, being offline isn't
+        let answers: [Int: Data] = [1817230: hifi, 5: Data(#"{"5":{"success":false}}"#.utf8)]
+        let steam: SteamLookup.Fetch = { url in
+            guard let id = answers.keys.first(where: { url.absoluteString.contains("appids=\($0)&") }) else { throw URLError(.notConnectedToInternet) }
+            return answers[id]!
+        }
+        let fetched = await GameAbout.fetch(1817230, into: cache, fetch: steam)
+        XCTAssertEqual(fetched?.genres, ["Action"])
+        let offline: SteamLookup.Fetch = { _ in throw URLError(.notConnectedToInternet) }
+        let cached = await GameAbout.fetch(1817230, into: cache, fetch: offline)
+        XCTAssertEqual(cached?.year, "2023")
+        let missing = await GameAbout.fetch(5, into: cache, fetch: steam)
+        XCTAssertNil(missing)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: cache.appendingPathComponent("5-about.none").path))
+        let unreachable = await GameAbout.fetch(6, into: cache, fetch: offline)
+        XCTAssertNil(unreachable)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cache.appendingPathComponent("6-about.none").path))
+    }
+
+    // Sainthood's logo is dark ink on a clear background: on couch mode's dark backdrop it would vanish, so a dark
+    // logo gives way to the typed title
+    func testDarkLogos() throws {
+        func logo(_ gray: CGFloat) -> Data {
+            let context = CGContext(data: nil, width: 20, height: 10, bitsPerComponent: 8, bytesPerRow: 0,
+                                    space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            context.setFillColor(red: gray, green: gray, blue: gray, alpha: 1)
+            context.fill(CGRect(x: 2, y: 2, width: 16, height: 6))           // the lettering; the rest stays clear
+            let data = NSMutableData()
+            let destination = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil)!
+            CGImageDestinationAddImage(destination, context.makeImage()!, nil)
+            _ = CGImageDestinationFinalize(destination)
+            return data as Data
+        }
+        XCTAssertEqual(LogoTone.isDark(logo(0.15)), true)
+        XCTAssertEqual(LogoTone.isDark(logo(0.9)), false)
+        XCTAssertNil(LogoTone.isDark(Data("not an image".utf8)))
+    }
+
     // Review I6: the hero's tint is worked out off the main thread, from the file's bytes.
     func testCoverTintIsTheAverageColor() throws {
         let context = CGContext(data: nil, width: 8, height: 12, bitsPerComponent: 8, bytesPerRow: 0,

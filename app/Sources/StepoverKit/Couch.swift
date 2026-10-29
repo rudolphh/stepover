@@ -78,6 +78,23 @@ public struct PressTracker: Sendable {
     }
 }
 
+/// The game is paused while the in-game panel is up, so the panel's buttons never act in it. Resume continues it
+/// only once every button is let go: an A still held when the game continues would reach it.
+public struct PausedGame: Sendable {
+    private var resuming = false
+
+    public init() {}
+
+    public mutating func resume() { resuming = true }
+
+    /// True once, when the game should continue.
+    public mutating func update(_ pressed: Set<CouchButton>) -> Bool {
+        guard resuming, pressed.isEmpty else { return false }
+        resuming = false
+        return true
+    }
+}
+
 public enum InGameOutcome: Equatable, Sendable { case none, resume, quit }
 
 /// The in-game panel (C5): A or B resumes the game; X asks before quitting, then A quits and B goes back.

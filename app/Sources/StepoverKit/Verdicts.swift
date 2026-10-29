@@ -37,7 +37,7 @@ public enum Verdicts {
 
     static let notTested = "Not tested yet. Try it; Stepover will remember how it went."
     static let singlePlayerLine = "Single-player only: online play needs anti-cheat that doesn't work on Mac"
-    static let fixLine = "Stepover applies a fix for this game automatically"
+    public static let fixLine = "Stepover applies a fix for this game automatically"
 
     public static func play(_ entry: GameEntry?, yourResult: PlayResult? = nil) -> PlayVerdict {
         var extra: [String] = []
@@ -90,6 +90,18 @@ public enum Verdicts {
         case .unsupported?: return verdict(.probablyWontRun, "Probably won't run")
         default: return verdict(.notTested, notTested)
         }
+    }
+
+    /// A headline as its answer and its qualifier, so couch mode can set the answer bold and keep the Library's
+    /// words: "Plays great (tested on Mac)", "Won't run: needs ...", "Not tested yet. Try it; ...".
+    public static func parts(_ headline: String) -> (String, String?) {
+        if headline.hasSuffix(")"), let open = headline.range(of: " (") {
+            return (String(headline[..<open.lowerBound]), String(headline[open.upperBound...].dropLast()))
+        }
+        for separator in [": ", ". "] {
+            if let at = headline.range(of: separator) { return (String(headline[..<at.lowerBound]), String(headline[at.upperBound...])) }
+        }
+        return (headline, nil)
     }
 
     public static func controller(_ entry: GameEntry?, playedWithController: Bool = false) -> ControllerVerdict? {

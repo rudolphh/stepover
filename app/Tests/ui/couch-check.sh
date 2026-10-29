@@ -39,9 +39,9 @@ osascript -e 'tell application id "io.github.rudolphh.stepover.test" to activate
 # going full screen takes a Space animation, during which the window reads empty
 for i in {1..20}; do dump=$("$AX" "$pid"); print -r -- "$dump" | grep -q "A Play" && break; sleep 0.5; done
 sleep 1; dump=$("$AX" "$pid")
-check "couch mode shows the button hints" 'print -r -- "$dump" | grep -q "A Play" && print -r -- "$dump" | grep -q "X Why"'
+check "couch mode shows the button hints" 'print -r -- "$dump" | grep -q "A Play" && print -r -- "$dump" | grep -q "X Details"'
 check "the hints are on screen" '"$AX" "$pid" visible "A Play"'
-check "the shortcut line is on screen" '"$AX" "$pid" visible "Hold Select + Start for a second in a game to come back here"'
+check "the shortcut line is on screen" '"$AX" "$pid" visible "In a game, hold Select + Start for a second to come back here"'
 check "the last played game is selected" 'print -r -- "$dump" | grep -q "AXHeading: ${order[1]}"'
 "$AX" "$pid" key 124 >/dev/null; sleep 1
 check "Right selects the next game" '"$AX" "$pid" | grep -q "AXHeading: ${order[2]}"'

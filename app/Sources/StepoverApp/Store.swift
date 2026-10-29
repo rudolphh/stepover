@@ -44,6 +44,12 @@ final class Store: ObservableObject {
     @Published var art: [Int: NSImage] = [:]
     /// Each cover's average color, for the hero's tint (worked out once, when the cover lands).
     var tint: [Int: NSColor] = [:]
+    /// Couch mode's look per Steam app id: the game's key art, its logo (light ones only: a dark logo would vanish
+    /// on the dark backdrop, so the title is typed instead) and what Steam says about it.
+    @Published var keyArt: [Int: NSImage] = [:]
+    @Published var logo: [Int: NSImage] = [:]
+    @Published var about: [Int: GameAbout] = [:]
+    private var lookRequested: Set<Int> = []
     /// The first connected game controller's name, nil when none.
     @Published var controllerName: String?
     /// The first runtime download failed; the toolbar offers Retry instead of an alert.
@@ -170,6 +176,7 @@ final class Store: ObservableObject {
                                 steamApps: { SteamLibrary.apps(in: $0) }, index: gameIndex, recent: RecentGames.load(),
                                 learned: learned.index)
         loadArt()
+        loadCouchLook()
         lookUpUnknownGames()
     }
 
@@ -221,6 +228,26 @@ final class Store: ObservableObject {
                         if let tint { self.tint[id] = NSColor(red: tint.red, green: tint.green, blue: tint.blue, alpha: 1) }
                         self.art[id] = image
                     }
+                }
+            }
+        }
+    }
+
+    /// Each Steam game's key art, logo and blurb for couch mode, fetched once (then read from Art on disk).
+    private func loadCouchLook() {
+        let wanted = Set(library.compactMap(\.steamAppID)).subtracting(lookRequested).sorted()
+        lookRequested.formUnion(wanted)
+        guard !wanted.isEmpty else { return }
+        Task.detached {
+            for id in wanted {
+                let hero = await GameArt.fetch(id, kind: .hero).flatMap { try? Data(contentsOf: $0) }
+                let logo = await GameArt.fetch(id, kind: .logo).flatMap { try? Data(contentsOf: $0) }
+                let lightLogo = logo.flatMap { LogoTone.isDark($0) == false ? $0 : nil }
+                let about = await GameAbout.fetch(id)
+                await MainActor.run {
+                    if let hero, let image = NSImage(data: hero) { self.keyArt[id] = image }
+                    if let lightLogo, let image = NSImage(data: lightLogo) { self.logo[id] = image }
+                    if let about { self.about[id] = about }
                 }
             }
         }

@@ -56,6 +56,18 @@ final class CouchTests: XCTestCase {
         XCTAssertEqual(Couch.secondary(hidden: true), .unhide)
     }
 
+    // the hands-on test: the A that confirmed Quit also pressed A in the game. The game is paused while the panel
+    // is up, and Resume continues it only once every button is let go (a held A would reach it on continuing)
+    func testResumeWaitsForRelease() {
+        var paused = PausedGame()
+        XCTAssertFalse(paused.update([]))           // nothing asked to continue
+        paused.resume()
+        XCTAssertFalse(paused.update([.a]))         // the A that chose Resume is still down
+        XCTAssertFalse(paused.update([.a, .b]))
+        XCTAssertTrue(paused.update([]))            // all let go: continue now
+        XCTAssertFalse(paused.update([]))           // once
+    }
+
     // the hands-on test: with several desktops (or couch mode's full screen) a started game opened out of sight
     func testGameWindowWorthShowing() {
         let strip = GameWindow(pid: 7, layer: 0, width: 1728, height: 33)     // Wine's menu bar strip

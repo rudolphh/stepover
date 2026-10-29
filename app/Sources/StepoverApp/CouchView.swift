@@ -3,14 +3,15 @@ import StepoverKit
 import SwiftUI
 
 /// Couch mode: the Library full screen for a TV across the room, driven by a controller (or the keyboard:
-/// arrows, Return = A, Escape = B, Space = X, Delete = Y, Tab = Menu). Never a Mac alert while it's up.
+/// arrows, Return = A, Escape = B, Space = X, Delete = Y, Tab = Menu). Never a Mac alert while it's up. The look follows
+/// the mockup the maintainer approved on 2026-10-29: the game's key art and logo, the answers, Steam's description.
 /// Spec: docs/superpowers/specs/2026-10-28-couch-mode-design.md.
 struct CouchView: View {
     @EnvironmentObject var store: Store
     @StateObject private var input = ControllerBridge()
     @State private var focus: String?   // the selected game's id: playing a game moves it, and focus goes along
     @State private var place = 0        // where focus was, for when its game is hidden
-    @State private var showWhy = false
+    @State private var showDetails = false
     @State private var menu: Int?
     @State private var confirm: Confirm?
     @State private var enteredFullScreen = false
@@ -49,20 +50,22 @@ struct CouchView: View {
     }
 
     var body: some View {
-        ZStack {
-            backdrop
-            VStack(alignment: .leading, spacing: 0) {
-                statusLine.padding(.horizontal, 72).padding(.top, 40)
-                Spacer(minLength: 24)
-                if let game = selected { hero(game).padding(.horizontal, 72) }
-                Spacer(minLength: 24)
-                rowView
-                hints.padding(.horizontal, 72).padding(.vertical, 28)
+        GeometryReader { geo in
+            ZStack {
+                backdrop(geo.size)
+                VStack(alignment: .leading, spacing: 0) {
+                    statusLine.padding(.horizontal, 96).padding(.top, 40)
+                    Spacer(minLength: 16)
+                    if let game = selected { hero(game).padding(.horizontal, 96) }
+                    Spacer(minLength: 20)
+                    rowView
+                    hints.padding(.horizontal, 96).padding(.top, 18).padding(.bottom, 34)
+                }
+                if showDetails, let game = selected { detailsPanel(game) }
+                if let menu { menuPanel(menu) }
+                if let confirm { confirmPanel(confirm) }
+                if let message = store.alert { messagePanel(message) }
             }
-            if showWhy, let game = selected { whyPanel(game) }
-            if let menu { menuPanel(menu) }
-            if let confirm { confirmPanel(confirm) }
-            if let message = store.alert { messagePanel(message) }
         }
         .environment(\.colorScheme, .dark)
         .focusable()
@@ -111,13 +114,13 @@ struct CouchView: View {
             }
             return
         }
-        if showWhy { if button == .b || button == .x { showWhy = false }; return }
+        if showDetails { if button == .b || button == .x { showDetails = false }; return }
         var row = CouchRow(count: games.count, index: index)
         switch button {
         case .left: row.move(-1); select(row.index)
         case .right: row.move(1); select(row.index)
         case .a: if let game = selected { primary(game) }
-        case .x: showWhy = selected != nil
+        case .x: showDetails = selected != nil
         case .y:
             guard let game = selected else { break }
             if Couch.secondary(hidden: store.hidden.contains(game.id)) == .unhide { store.setHidden(game, false) } else { confirm = .hide(game) }
@@ -159,23 +162,45 @@ struct CouchView: View {
 
     // MARK: pieces
 
-    private var backdrop: some View {
-        Color(nsColor: selected.flatMap { $0.steamAppID }.flatMap { store.tint[$0] } ?? NSColor(white: 0.12, alpha: 1))
-            .overlay {
-                // an overlay never sizes what it sits on: a portrait cover filling the screen as a ZStack layer
-                // made the whole screen taller than the display and pushed the row and hints off it
-                if let id = selected?.steamAppID, let image = store.art[id] {
-                    Image(nsImage: image).resizable().scaledToFill().blur(radius: 70).opacity(0.55)
+    /// The game's key art across the top right, its color behind everything, fading to it toward the text and the
+    /// row. A game without key art keeps the blurred cover. Overlays never size the base (a filling image as a
+    /// ZStack layer once made the screen taller than the display).
+    private func backdrop(_ size: CGSize) -> some View {
+        let id = selected?.steamAppID
+        let base = id.flatMap { store.tint[$0] }?.blended(withFraction: 0.82, of: .black) ?? NSColor(white: 0.08, alpha: 1)
+        let ground = Color(nsColor: base)
+        return ground
+            .overlay(alignment: .topTrailing) {
+                if let id, let art = store.keyArt[id] {
+                    let height = size.height * 0.7
+                    Image(nsImage: art).resizable().aspectRatio(contentMode: .fill)
+                        .frame(width: max(height * art.size.width / max(art.size.height, 1), size.width), height: height,
+                               alignment: .trailing)
+                        .id(id).transition(.opacity)
+                } else if let id, let cover = store.art[id] {
+                    Image(nsImage: cover).resizable().scaledToFill().blur(radius: 70).opacity(0.55)
+                        .frame(width: size.width, height: size.height).id(id).transition(.opacity)
                 }
             }
-            .overlay { LinearGradient(colors: [.black.opacity(0.35), .black.opacity(0.85)], startPoint: .top, endPoint: .bottom) }
-        .ignoresSafeArea()
-        .clipped()
-        .accessibilityHidden(true)
+            .overlay {
+                LinearGradient(stops: [.init(color: ground, location: 0), .init(color: ground.opacity(0.9), location: 0.45),
+                                       .init(color: ground.opacity(0), location: 0.7)], startPoint: .leading, endPoint: .trailing)
+            }
+            .overlay {
+                LinearGradient(stops: [.init(color: ground.opacity(0), location: 0.38), .init(color: ground.opacity(0.8), location: 0.6),
+                                       .init(color: ground, location: 0.72)], startPoint: .top, endPoint: .bottom)
+            }
+            .overlay(alignment: .top) {
+                LinearGradient(colors: [.black.opacity(0.42), .clear], startPoint: .top, endPoint: .bottom).frame(height: 160)
+            }
+            .animation(.easeInOut(duration: 0.4), value: id)
+            .ignoresSafeArea()
+            .clipped()
+            .accessibilityHidden(true)
     }
 
     @ViewBuilder private var statusLine: some View {
-        HStack {
+        HStack(spacing: 32) {
             if !store.runtimeReady, let progress = store.runtimeProgress {
                 Text("Getting ready to play: \(Int(progress * 100))%")
             } else if !store.runtimeReady, store.runtimeFailed {
@@ -184,52 +209,80 @@ struct CouchView: View {
                 Text("Games open on your other screen. Menu > Make This the Main Display")
             }
             Spacer()
-            Label(store.controllerName.map { "\($0) connected" } ?? "No controller", systemImage: "gamecontroller")
+            Label(store.controllerName ?? "No controller", systemImage: "gamecontroller")
+                .accessibilityLabel(store.controllerName.map { "\($0) connected" } ?? "No controller")
+            TimelineView(.everyMinute) { context in Text(context.date, format: .dateTime.hour().minute()) }
         }
-        .font(.system(size: 20, weight: .medium))
-        .foregroundStyle(.secondary)
+        .font(.system(size: 22, weight: .medium))
+        .foregroundStyle(.white.opacity(0.88))
     }
 
-    private func hero(_ game: LibraryGame) -> some View {
-        let verdict = Verdicts.play(game.entry)
-        return VStack(alignment: .leading, spacing: 22) {
+    /// The game's logo as its title, or its name when it has none or a dark one.
+    @ViewBuilder private func title(_ game: LibraryGame) -> some View {
+        if let id = game.steamAppID, let logo = store.logo[id] {
+            Image(nsImage: logo).resizable().scaledToFit()
+                .frame(maxWidth: 600, maxHeight: 200, alignment: .bottomLeading)
+                .frame(height: 200, alignment: .bottomLeading)
+                .accessibilityLabel(game.name)
+                .accessibilityAddTraits(.isHeader)
+        } else {
             Text(game.name)
                 .font(.system(size: 72, weight: .bold).width(.expanded))
                 .lineLimit(2).minimumScaleFactor(0.5)
                 .accessibilityAddTraits(.isHeader)
+        }
+    }
+
+    /// The selected game: its title, the answer to "will it play here" (the Library's words, the answer in bold),
+    /// the controller answer and any fix in smaller type, Steam's description, and Play.
+    private func hero(_ game: LibraryGame) -> some View {
+        let verdict = Verdicts.play(game.entry)
+        let (answer, qualifier) = Verdicts.parts(verdict.headline)
+        let blurb = game.steamAppID.flatMap { store.about[$0]?.blurb }
+        return VStack(alignment: .leading, spacing: 22) {
+            title(game)
             if game.isSteamClient {
-                Text("Your Steam games show up here by themselves.").font(.system(size: 26)).foregroundStyle(.secondary)
+                Text("Your Steam games show up here by themselves.").font(.system(size: 27)).foregroundStyle(.white.opacity(0.86))
             } else {
-                HStack(spacing: 14) {
-                    VerdictPill(text: verdict.headline, tone: verdict.kind.tone, large: true, scale: 1.8)
-                    if let controller = Verdicts.controller(game.entry) {
-                        Label(controller.rawValue, systemImage: "gamecontroller")
-                            .font(.system(size: 23, weight: .medium))
-                            .padding(.horizontal, 20).padding(.vertical, 11)
-                            .background(.white.opacity(0.1), in: Capsule())
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 14) {
+                        Circle().fill(verdict.kind.tone.color(.dark)).frame(width: 14, height: 14).accessibilityHidden(true)
+                        Text(answer).fontWeight(.bold)
+                        if let qualifier { Text(qualifier).foregroundStyle(.white.opacity(0.8)) }
                     }
-                }
-                // the facts behind the answer, so the TV says why without opening Why (X shows them all)
-                let facts = verdict.extra + verdict.reasons.map { $0.text + ($0.source.map { "  (\($0))" } ?? "") }
-                if !facts.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(Array(facts.prefix(3).enumerated()), id: \.offset) { _, fact in Text(fact).lineLimit(1) }
+                    .font(.system(size: 31))
+                    .accessibilityElement(children: .combine)
+                    Group {
+                        if let controller = Verdicts.controller(game.entry) { Label(controller.rawValue, systemImage: "gamecontroller") }
+                        ForEach(verdict.extra, id: \.self) { line in
+                            Label(line, systemImage: line == Verdicts.fixLine ? "wrench.and.screwdriver" : "info.circle")
+                        }
                     }
-                    .font(.system(size: 22)).foregroundStyle(.white.opacity(0.85))
+                    .font(.system(size: 22))
+                    .foregroundStyle(.white.opacity(0.86))
                 }
+            }
+            if let blurb {
+                Text(blurb).font(.system(size: 27)).lineSpacing(6).lineLimit(2)
+                    .frame(maxWidth: 860, alignment: .leading)
+                    .foregroundStyle(.white.opacity(0.86))
             }
             if store.hidden.contains(game.id) {
                 Label("Hidden. Y puts it back with your games.", systemImage: "eye.slash")
-                    .font(.system(size: 22)).foregroundStyle(.white.opacity(0.85))
+                    .font(.system(size: 22)).foregroundStyle(.white.opacity(0.86))
             }
-            if store.runningGame?.id == game.id {
-                Text("Running now").font(.system(size: 24, weight: .semibold)).foregroundStyle(.green)
-            } else if let played = game.lastPlayed {
-                Text("Last played \(played, format: .relative(presentation: .named))")
-                    .font(.system(size: 22)).foregroundStyle(.white.opacity(0.85))
+            HStack(spacing: 32) {
+                playPrompt(game)
+                if store.runningGame?.id == game.id {
+                    Text("Running now").font(.system(size: 24, weight: .semibold)).foregroundStyle(.green)
+                } else if let played = game.lastPlayed {
+                    Text("Last played \(played, format: .relative(presentation: .named))")
+                        .font(.system(size: 24)).foregroundStyle(.white.opacity(0.8))
+                }
             }
-            playPrompt(game).padding(.top, 10)
+            .padding(.top, 6)
         }
+        .frame(maxWidth: 940, alignment: .leading)
     }
 
     /// What A does on the selected game, as the screen's one big button.
@@ -242,17 +295,17 @@ struct CouchView: View {
         case .play: label = game.isSteamClient ? "Open Steam" : "Play"
         default: label = "Starting \(store.starting?.name ?? game.name)"; waiting = true   // A waits meanwhile
         }
-        return HStack(spacing: 14) {
+        return HStack(spacing: 16) {
             Group {
-                if waiting { ProgressView().controlSize(.small) } else { Text("A").font(.system(size: 24, weight: .bold)) }
+                if waiting { ProgressView().controlSize(.regular) } else { Text("A").font(.system(size: 26, weight: .bold)) }
             }
             .foregroundStyle(.white)
-            .frame(width: 48, height: 48).background(.black.opacity(0.75), in: Circle())
-            Text(label).font(.system(size: 28, weight: .bold)).foregroundStyle(.black)
+            .frame(width: 56, height: 56).background(Color(white: 0.07), in: Circle())
+            Text(label).font(.system(size: 32, weight: .bold)).foregroundStyle(Color(white: 0.07))
         }
-        .padding(.leading, 8).padding(.trailing, 36).padding(.vertical, 8)
+        .padding(.leading, 10).padding(.trailing, 40).frame(height: 76)
         .background(.white, in: Capsule())
-        .shadow(color: .black.opacity(0.4), radius: 16, y: 6)
+        .shadow(color: .black.opacity(0.45), radius: 18, y: 8)
         .onTapGesture { primary(game) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(waiting ? label : "A \(label)")
@@ -265,49 +318,48 @@ struct CouchView: View {
                 HStack(alignment: .bottom, spacing: 28) {
                     ForEach(Array(games.enumerated()), id: \.element.id) { at, game in
                         let isSelected = at == index
-                        VStack(alignment: .leading, spacing: 10) {
-                            CoverView(game: game)
-                                .frame(width: isSelected ? 230 : 170)
-                                .padding(5)
-                                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .strokeBorder(isSelected ? Color.white : .clear, lineWidth: 4))
-                                .shadow(color: .black.opacity(isSelected ? 0.6 : 0.3), radius: isSelected ? 20 : 8, y: 8)
-                            Text(game.name).font(.system(size: isSelected ? 20 : 17, weight: .semibold)).lineLimit(1)
-                                .frame(width: isSelected ? 230 : 170, alignment: .leading)
-                                .opacity(isSelected ? 1 : 0.7)
-                        }
-                        .id(game.id)
-                        .animation(.easeOut(duration: 0.18), value: index)
-                        .onTapGesture { select(at) }
+                        CoverView(game: game)
+                            .frame(width: isSelected ? 180 : 144)
+                            .padding(5)
+                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(isSelected ? Color.white : .clear, lineWidth: 4))
+                            .shadow(color: .black.opacity(isSelected ? 0.55 : 0.4), radius: isSelected ? 20 : 10, y: 8)
+                            .opacity(isSelected ? 1 : 0.7)
+                            .id(game.id)
+                            .animation(.easeOut(duration: 0.18), value: index)
+                            .onTapGesture { select(at) }
+                            .accessibilityLabel(game.name)
                     }
                 }
-                .padding(.horizontal, 72)
+                .padding(.horizontal, 96)
+                .padding(.vertical, 12)
             }
             .onChange(of: index) { _, at in
                 if games.indices.contains(at) { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(games[at].id, anchor: .center) } }
             }
         }
-        .frame(height: 420)
+        .frame(height: 320)
     }
 
     private var hints: some View {
-        HStack(spacing: 34) {
-            hint("X", "Why")
+        HStack(spacing: 36) {
+            hint("X", "Details")
             hint("Y", selected.map { store.hidden.contains($0.id) } == true ? "Show in Library" : "Hide")
             hint("Menu", "Options")
             Spacer()
-            Text("Hold Select + Start for a second in a game to come back here")
-                .font(.system(size: 19, weight: .medium)).foregroundStyle(.white.opacity(0.85))
+            Text("In a game, hold Select + Start for a second to come back here")
+                .font(.system(size: 22, weight: .medium)).foregroundStyle(.white.opacity(0.82))
         }
     }
 
     private func hint(_ button: String, _ word: String?) -> some View {
-        HStack(spacing: 10) {
-            Text(button).font(.system(size: 17, weight: .bold))
-                .padding(.horizontal, button.count > 1 ? 12 : 0).frame(minWidth: 34, minHeight: 34)
+        HStack(spacing: 12) {
+            Text(button).font(.system(size: button.count > 1 ? 18 : 19, weight: .bold))
+                .padding(.horizontal, button.count > 1 ? 14 : 0).frame(minWidth: 36, minHeight: 36)
                 .background(.white.opacity(0.18), in: Capsule())
-            if let word { Text(word).font(.system(size: 19, weight: .medium)) }
+            if let word { Text(word).font(.system(size: 22, weight: .medium)) }
         }
+        .foregroundStyle(.white.opacity(0.88))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(word.map { "\(button) \($0)" } ?? button)
     }
@@ -322,19 +374,47 @@ struct CouchView: View {
         }
     }
 
-    private func whyPanel(_ game: LibraryGame) -> some View {
+    /// X: everything behind the answers, with sources, beside the game rather than over it.
+    private func detailsPanel(_ game: LibraryGame) -> some View {
         let verdict = Verdicts.play(game.entry)
-        return overlay {
-            Text(verdict.headline).font(.system(size: 34, weight: .bold))
-            ForEach(verdict.extra, id: \.self) { Text($0).font(.system(size: 22, weight: .semibold)) }
-            ForEach(Array(verdict.reasons.enumerated()), id: \.offset) { _, reason in
-                (Text(reason.text) + Text(reason.source.map { "  " + $0 } ?? "").foregroundColor(.secondary))
-                    .font(.system(size: 22))
+        let (answer, qualifier) = Verdicts.parts(verdict.headline)
+        let about = game.steamAppID.flatMap { store.about[$0] }
+        let genres = (about?.genres.prefix(2)).map { $0.joined(separator: ", ") } ?? ""
+        let meta = [genres.isEmpty ? nil : genres + ".", about?.year.map { "Released \($0)." }].compactMap { $0 }.joined(separator: " ")
+        return ZStack(alignment: .trailing) {
+            Color.black.opacity(0.5).ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 30) {
+                Text(game.name).font(.system(size: 44, weight: .bold)).accessibilityAddTraits(.isHeader)
+                if !meta.isEmpty { Text(meta).font(.system(size: 24)).foregroundStyle(.white.opacity(0.8)) }
+                if !game.isSteamClient {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Will it play on this Mac").font(.system(size: 24, weight: .semibold)).foregroundStyle(.white.opacity(0.8))
+                        HStack(spacing: 14) {
+                            Circle().fill(verdict.kind.tone.color(.dark)).frame(width: 14, height: 14).accessibilityHidden(true)
+                            Text(answer).fontWeight(.bold)
+                            if let qualifier { Text(qualifier).foregroundStyle(.white.opacity(0.8)) }
+                        }
+                        .font(.system(size: 30))
+                        ForEach(verdict.extra, id: \.self) { Text($0).font(.system(size: 24)) }
+                        ForEach(Array(verdict.reasons.enumerated()), id: \.offset) { _, reason in
+                            (Text(reason.text) + Text(reason.source.map { "  " + $0 } ?? "").foregroundColor(.white.opacity(0.66)))
+                                .font(.system(size: 24)).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    if let controller = Verdicts.controller(game.entry) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("Controller").font(.system(size: 24, weight: .semibold)).foregroundStyle(.white.opacity(0.8))
+                            Text(controller.rawValue).font(.system(size: 28))
+                        }
+                    }
+                }
+                Spacer()
+                hint("B", "Close")
             }
-            if let controller = Verdicts.controller(game.entry) {
-                Label(controller.rawValue, systemImage: "gamecontroller").font(.system(size: 22))
-            }
-            Text("B Close").font(.system(size: 18)).foregroundStyle(.secondary)
+            .padding(.horizontal, 72).padding(.top, 96).padding(.bottom, 72)
+            .frame(width: 780, alignment: .leading)
+            .frame(maxHeight: .infinity, alignment: .topLeading)
+            .background(Color(white: 0.07).opacity(0.97), ignoresSafeAreaEdges: .all)
         }
     }
 
