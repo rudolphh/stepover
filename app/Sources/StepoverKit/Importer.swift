@@ -104,13 +104,13 @@ public enum Importer {
 
     /// A new, empty 64-bit bottle (Windows 10, MSync on, D3DMetal by default).
     @discardableResult
-    public static func create(_ name: String) throws -> Bottle {
+    public static func create(_ name: String, extraEnv: [String: String] = [:]) throws -> Bottle {
         let dest = Paths.bottles.appendingPathComponent(name)
         guard !FileManager.default.fileExists(atPath: dest.path) else { throw StepoverError.message("\(name) already exists") }
         try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
         let bottle = Bottle(url: dest)
         try bottle.save(BottleConfig(graphics: .d3dmetal, env: ["WINEMSYNC": "1"], origin: "created by Stepover"))
-        let status = try Launcher.wine(["wineboot", "--init"], bottle: bottle, wait: true)
+        let status = try Launcher.wine(["wineboot", "--init"], bottle: bottle, extraEnv: extraEnv, wait: true)
         guard status == 0 else { throw StepoverError.message("wineboot exited with \(status); see \(bottle.logURL.path)") }
         return bottle
     }

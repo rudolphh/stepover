@@ -35,7 +35,8 @@ public enum InstallStage: Codable, Hashable, Sendable {
         case .confirm: return "Not installed yet"
         case .alreadyInLibrary: return "Already in your Library"
         case .gettingReady: return "Getting ready"
-        case .copying(let done, let total): return "Copying, \(Self.gigabytes(done)) of \(Self.gigabytes(total))"
+        case .copying(let done, let total):
+            return total < 1_000_000_000 ? "Copying" : "Copying, \(Self.gigabytes(done)) of \(Self.gigabytes(total))"
         case .installing(let written):
             return written < 1_000_000_000 ? "Installing" : "Installing (\(Self.gigabytes(written)) so far)"
         case .needsYou: return "The installer needs you: it's open on the Mac"

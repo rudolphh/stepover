@@ -4,7 +4,7 @@
 #   Tiny NSIS Game/           NSIS
 #   Tiny GOG/                 a base Inno installer plus an add-on installer
 #   Tiny Installed Game/      an installed game (no installer)
-#   Empty/, Partial/ (still downloading), tiny.zip
+#   Empty/, Partial/ (still downloading), tiny.zip, tiny.iso (the NSIS installer on a disk image)
 # Needs mingw-w64 and makensis (Homebrew), the stepover command (STEPOVER_CLI, default: this checkout's debug build)
 # and an installed Wine runtime. Inno Setup's compiler is downloaded once and run under Wine in <out>/tools.
 set -euo pipefail
@@ -68,10 +68,11 @@ cp "$build/TinyGame.exe" "$installed/TinyGame.exe"
 cp "$build/TinyGame.exe" "$installed/UnityCrashHandler64.exe"
 cp "$build/vc_redist.x64.exe" "$installed/unins000.exe"
 
-rm -rf "$out/Empty" "$out/Partial" "$out/tiny.zip"
+rm -rf "$out/Empty" "$out/Partial" "$out/tiny.zip" "$out/tiny.iso"
 mkdir -p "$out/Empty" "$out/Partial"
 cp "$game/setup.exe" "$out/Partial/setup.exe"
 head -c 4096 "$game/setup-1.bin" > "$out/Partial/setup-1.bin.part"
 (cd "$out" && zip -qr tiny.zip "Tiny Installed Game")
+hdiutil makehybrid -quiet -iso -joliet -o "$out/tiny.iso" "$nsis"
 
 print "built in $out"

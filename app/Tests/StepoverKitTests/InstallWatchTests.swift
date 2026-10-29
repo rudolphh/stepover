@@ -92,6 +92,7 @@ final class InstallWatchTests: XCTestCase {
         XCTAssertEqual(InstallStage.alreadyInLibrary("x").text, "Already in your Library")
         XCTAssertEqual(InstallStage.gettingReady.text, "Getting ready")
         XCTAssertEqual(InstallStage.copying(done: 12 * gb, total: 40 * gb).text, "Copying, 12 GB of 40 GB")
+        XCTAssertEqual(InstallStage.copying(done: 3_000_000, total: 5_000_000).text, "Copying")
         XCTAssertEqual(InstallStage.installing(written: 12 * gb).text, "Installing (12 GB so far)")
         XCTAssertEqual(InstallStage.installing(written: 300_000_000).text, "Installing")
         XCTAssertEqual(InstallStage.needsYou.text, "The installer needs you: it's open on the Mac")

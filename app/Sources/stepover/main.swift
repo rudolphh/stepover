@@ -18,6 +18,9 @@ usage: stepover <command> ...
   display <bottle> [--high-res on|off] [--dpi 96|144|192]
   pick <exe file>                       which backend Stepover would choose, and why
   make-app <bottle> <program>           Mac app in \(Paths.launchers.path)
+  add [--no-lookup] [--anyway] <folder, setup .exe/.msi or .iso>...
+                                        add a game from its installer or folder: a bottle of its own, the
+                                        installer run unattended, the game found and set up
   install <bottle> <setup.exe|.msi> [-- installer args]
                                         run a Windows installer; its new shortcuts become programs
   components <bottle> <verb...>         install runtime components with winetricks (vcrun2022, dotnet48...)
@@ -238,6 +241,82 @@ do {
         default:
             fail("runtime status | runtime install [<name>] [--from <file or URL>] | runtime remove <name>")
         }
+
+    case "add":
+        var lookUp = true, anyway = false
+        let paths = args.filter { arg in
+            if arg == "--no-lookup" { lookUp = false; return false }
+            if arg == "--anyway" { anyway = true; return false }
+            return true
+        }
+        guard !paths.isEmpty else { fail("add [--no-lookup] [--anyway] <folder, setup .exe/.msi or .iso>...") }
+        var items: [URL] = []
+        for path in paths {
+            let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath).standardizedFileURL
+            if case .several(let folders) = GameFolder.plan(for: url) { items += folders } else { items.append(url) }
+        }
+        let index = GameIndex(GamesList.load())
+        var learned = LearnedGames.load()
+        let today = String(ISO8601DateFormatter().string(from: Date()).prefix(10))
+        final class Printer: @unchecked Sendable {
+            private let lock = NSLock()
+            private var last = ""
+            func say(_ game: String, _ text: String) {
+                lock.lock(); defer { lock.unlock() }
+                guard text != last else { return }
+                last = text
+                print("\(game): \(text)")
+                fflush(stdout)
+            }
+        }
+        var failed = false
+        for item in items {
+            let plan = GameFolder.plan(for: item)
+            switch plan {
+            case .archive, .stillDownloading, .nothing, .several:
+                let failure: InstallFailure = plan == .archive ? .archive : plan == .stillDownloading ? .stillDownloading : .nothing
+                print("\(item.lastPathComponent): \(failure.text)")
+                failed = true
+                continue
+            default: break
+            }
+            final class Box: @unchecked Sendable { var found = Recognized(name: "", entry: nil); var learned: LearnedGames
+                init(_ learned: LearnedGames) { self.learned = learned } }
+            let box = Box(learned)
+            let recognized = DispatchSemaphore(value: 0)
+            Task.detached {
+                box.found = await AddGame.recognize(item, plan: plan, index: index, learned: &box.learned, lookUp: lookUp, today: today)
+                recognized.signal()
+            }
+            recognized.wait()
+            learned = box.learned
+            let found = box.found
+            let library = Library.games(bottles: Bottle.all().map { (bottle: $0, config: $0.loadConfig()) },
+                                        steamApps: { SteamLibrary.apps(in: $0) }, index: index, recent: [], learned: learned.index)
+            if let tile = Recognize.existing(found, in: library) {
+                print("\(found.name): \(InstallStage.alreadyInLibrary(tile.id).text) (\(tile.bottle.name))")
+                continue
+            }
+            if Recognize.needsConfirmation(found.entry) && !anyway {
+                print("\(found.name): \(Verdicts.play(found.entry).headline). \(InstallStage.confirm.text); add --anyway to install it.")
+                continue
+            }
+            let job = UUID().uuidString
+            let name = AddGame.bottleName(for: found.name)
+            let printer = Printer()
+            printer.say(found.name, InstallStage.gettingReady.text)
+            do {
+                let bottle = try AddGame.makeBottle(named: name, job: job)
+                let result = try AddGame.run(plan, source: item, game: found.name, into: bottle, job: job,
+                                             knownExes: found.entry?.exes ?? [], report: { printer.say(found.name, $0.text) })
+                printer.say(found.name, "\(InstallStage.done(addOnFailed: result.addOnFailed).text): \(result.program.exe)")
+            } catch {
+                printer.say(found.name, (error as? AddGameError)?.failure.text ?? error.localizedDescription)
+                failed = true
+                try? AddGame.discard(bottleNamed: name, job: job)
+            }
+        }
+        if failed { exit(1) }
 
     case "install":
         var installerArgs: [String] = []
