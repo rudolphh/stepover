@@ -113,7 +113,8 @@ in couch mode's Menu > Add a Game, or passed to `stepover add`, goes through `Ad
   audio driver is off while it runs, so installer music stays quiet (the game keeps its sound).
 - **The watcher** (`InstallWatch`, every half second, sizes every 10 s) looks at the bottle's processes and the
   installer's own (which run in the installer's folder, outside the bottle):
-  - redistributable installers and checksum tools that hang under Wine (`dxwebsetup.exe`, `vc_redist*.exe`,
+  - redistributable installers and checksum tools that hang under Wine (`dxwebsetup.exe` and the `dxwsetup.exe` it
+    unpacks, `vc_redist*.exe`,
     `QuickSFV.exe`, `UE4PrereqSetup*.exe`, …) are ended;
   - an Inno Setup `setup.tmp` that is large-address-aware is paused and a copy without that flag runs in its place
     with the loader's own `/SL5=…` arguments and a log of its own: unarc.dll overflows a 32-bit sum when Wine lets that
