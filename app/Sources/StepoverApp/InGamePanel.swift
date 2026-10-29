@@ -5,7 +5,9 @@ import SwiftUI
 
 /// The in-game panel (spec C5): while a game Stepover started runs, Stepover listens to the controller in the
 /// background, and holding Select + Start for a second (or Home, when macOS isn't using it) shows Resume and
-/// Quit Game over the game. The panel never takes focus, so the game stays in front with the controller.
+/// Quit Game over the game. The panel never takes focus, so the game stays in front with the controller. While it's
+/// up the game is paused (its processes stopped), so the panel's buttons don't act in it; Resume continues it once
+/// every button is let go.
 @MainActor
 final class InGamePanel {
     private unowned let store: Store
@@ -15,14 +17,23 @@ final class InGamePanel {
     private var menu = InGameMenu()
     private var timer: Timer?
     private var panel: NSPanel?
+    private var paused = PausedGame()
+    private var stopped: [Int32] = []   // the game's processes, paused while the panel is up
 
-    init(store: Store) { self.store = store }
+    init(store: Store) {
+        self.store = store
+        // never leave a game paused behind
+        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.continueGame() }
+        }
+    }
 
     /// Background listening on while `game` runs, off otherwise; the panel goes away with the game.
     func watch(_ game: LibraryGame?) {
         self.game = game
         if game == nil {
             close()
+            continueGame()
             timer?.invalidate()
             timer = nil
             GCController.shouldMonitorBackgroundEvents = false
@@ -39,6 +50,7 @@ final class InGamePanel {
         let pressed = GCController.couchPad?.couchButtons ?? []
         let now = Date().timeIntervalSinceReferenceDate
         let shortcut = detector.update(pressed, at: now)
+        if paused.update(pressed) { continueGame() }
         guard panel != nil else {
             // only the shortcut counts, and only while the game is in front (couch mode has its own Menu)
             if shortcut, !NSApp.isActive { show() }
@@ -51,9 +63,12 @@ final class InGamePanel {
     private func press(_ button: CouchButton) {
         switch menu.press(button) {
         case .none: layout()
-        case .resume: close()
+        case .resume:
+            close()
+            paused.resume()
         case .quit:
             close()
+            stopped = []   // quitting ends them paused or not
             guard let game else { return }
             store.quitGame(game) { [store] in store.comeBack(after: game) }
         }
@@ -72,6 +87,13 @@ final class InGamePanel {
         self.panel = panel
         layout()
         panel.orderFrontRegardless()
+        stopped = Couch.processes(of: game, in: RunningPrograms.processes()).map(\.pid)
+        for pid in stopped { kill(pid, SIGSTOP) }
+    }
+
+    private func continueGame() {
+        for pid in stopped { kill(pid, SIGCONT) }
+        stopped = []
     }
 
     /// Sized for the game's screen (games go full screen on the main display, C2b) and centered on it.
@@ -112,6 +134,7 @@ struct InGamePanelView: View {
                 HStack(spacing: 34) { hint("A", "Quit", .a); hint("B", "Back", .b) }
             } else {
                 Text(name).font(.system(size: 44, weight: .bold)).lineLimit(2).accessibilityAddTraits(.isHeader)
+                Text("Paused").font(.system(size: 24)).foregroundStyle(.white.opacity(0.8))
                 HStack(spacing: 34) { hint("A", "Resume", .a); hint("X", "Quit Game", .x) }
             }
         }
