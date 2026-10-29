@@ -12,7 +12,7 @@ Today every one of those games took a Claude session of hand work:
 
 - Escape from Duckov's installer froze at 16.9% forever (unarc's large-address bug, below);
 - Sainthood and I Am Jesus Christ needed the same fix, plus ending three steps that hang under Wine;
-- a DODI-style installer failed with "Unarc error -11" because of one environment variable;
+- another installer failed with "Unarc error -11" because of one environment variable;
 - Hi-Fi Rush needed the right Windows DPI to render at full size;
 - each game needed its `.exe` found and added by hand.
 

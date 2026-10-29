@@ -87,6 +87,65 @@ so a runtime with an identical `wine.inf` (only its date differs) skips the redo
 process it started (`wineserver -w`), then adds the programs whose Start Menu or desktop shortcuts
 appeared. Components (`stepover components`) are winetricks verbs run with the bottle's own Wine.
 
+## Adding games from an installer or folder
+
+Spec: `docs/superpowers/specs/2026-10-29-add-game-from-folder-design.md`. A folder, a setup `.exe` or `.msi`, or an
+`.iso` dropped on the Library window or the Dock icon, chosen with File > Add Game from Installer or Folder…, picked
+in couch mode's Menu > Add a Game, or passed to `stepover add`, goes through `AddGame` in StepoverKit:
+
+- **What it is** (`GameFolder.plan`): installers are told by what they hold (Inno Setup's loader signature
+  `rDlPtS`, NSIS's `NullsoftInst`, `.msi`, else a `setup*`/`install*` name). A folder with several installers is one
+  game: the base (the shortest cleaned name), then add-ons, then `patch*` updates in version order. A folder of
+  installer folders is several games; a folder with no installer but a windowed `.exe` is an installed game, copied
+  into the bottle (`cp -Rc`: an instant clone on the same disk). Archives, partial downloads and empty folders get one
+  sentence each.
+- **Which game** (`FolderName.clean`, `Recognize`): generic rules turn the folder's name into the game's ("Some.Game.
+  v1.0.2-TAG" is "Some Game"); the cleaned name, the installer's file name and its version resource's product name
+  are matched against the games list, then one Steam store lookup by the first name (the Library's rules). A game
+  already in the Library offers Play or Install Again; anti-cheat with no single-player waits for Install Anyway.
+- **Its bottle** (`AddGame.makeBottle`): 64-bit Windows 10, MSync on, High Resolution Mode at 96 DPI, Wine's menu
+  builder off, and Documents, Desktop, Downloads, Music, Pictures and Videos as real folders inside the bottle (each
+  with `.stepover-keep`), so no macOS access dialog can stall an install and saves stay with the game.
+- **Running the installer** unattended: Inno Setup with `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR=… /LOG=…`,
+  NSIS with `/S /D=…` through a one-line batch file (NSIS needs `/D=` raw, and Wine would quote it), MSI with `/qn`;
+  anything else runs with its window ("The installer needs you"). The game goes to `C:\Games\<Game>`. Nothing is
+  written into the dropped folder, and `winebrowser.exe` is off so no installer opens a web page on the Mac.
+- **The watcher** (`InstallWatch`, every half second, sizes every 10 s) looks at the bottle's processes and the
+  installer's own (which run in the installer's folder, outside the bottle):
+  - redistributable installers and checksum tools that hang under Wine (`dxwebsetup.exe`, `vc_redist*.exe`,
+    `QuickSFV.exe`, `UE4PrereqSetup*.exe`, …) are ended;
+  - an Inno Setup `setup.tmp` that is large-address-aware is paused and a copy without that flag runs in its place
+    with the loader's own `/SL5=…` arguments and a log of its own: unarc.dll overflows a 32-bit sum when Wine lets that
+    process reserve 2 GB, and loops forever (the "16.9%" freeze);
+  - under 5 GB free the installer is paused ("Paused: the disk is nearly full…") and continues at 10 GB;
+  - nothing written to the game's folder for 10 minutes with the installer idle, or for 30 minutes at all, ends it
+    ("The installer stopped responding."); the dropped folder going away (an unplugged drive) ends it too.
+  A failed installer's checksum lists (`.md5`, `.sfv`) are checked: damaged files get their own sentence; otherwise
+  the error is the last suppressed message box in Inno Setup's log.
+- **Afterwards:** the game's program is found (`GameFinder`: an exe the games list names, a new shortcut's target, a
+  top-level exe named like the game or its initials, the only top-level exe, then the largest windowed exe that loads
+  graphics; never uninstallers, installers, redistributables, crash reporters or settings tools), its graphics are
+  picked, MetalFX is on when the game ships `nvngx_dlss.dll`, winetricks installs what its files import that Wine
+  doesn't cover (`NeededComponents`: d3dx9, d3dx10, d3dx11, d3dcompiler_43, xact, physx) instead of the bundled
+  redistributables, and the fix list's components are applied. The Mac doesn't idle-sleep meanwhile.
+- **Records:** `<STEPOVER_HOME>/installs.json` is the queue the app and `stepover add` share (one install at a
+  time; an install whose process is gone reads Interrupted, with Try Again). `<bottle>/stepover-install.json`
+  (`InstallOutcome`) names the job that made the bottle (only it may delete the bottle) and keeps the stage reached,
+  the installer kinds, exit status, fixes, components and the log's tail with the dropped folder as `<folder>` and
+  the home folder as `~`, for reporting later.
+- **The Trash offer:** after 10 minutes of play, the game's screen offers once to move the installer folder (or the
+  original of a copied game) to the Trash, with its size; never for a folder on a network share or one another
+  install still uses.
+
+A fresh bottle spends about 40 seconds inside Wine on its first installer (seen with `stepover install` too), so
+each added game takes a minute or two more than its installer alone.
+
+Checks: `app/Tests/install/make-installers.sh <dir>` builds small Inno Setup, NSIS, add-on, installed-game and
+disk-image test cases (Inno Setup's compiler runs under Stepover's Wine; NSIS from Homebrew's `makensis`);
+`app/Tests/install/add-check.sh <dir>` runs `stepover add` on them, and `app/Tests/ui/add-check.sh <dir>` drives the
+app. `STEPOVER_LARGE_ADDRESS_FIX=always` (checks only) applies the large-address fix to installers that don't need
+it, so the recipe runs end to end with the small test installer.
+
 ## The Dock menu
 
 Every start through `Launcher.run` (the app, `stepover run` and the Mac launchers) is recorded in

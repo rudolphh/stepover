@@ -35,6 +35,14 @@ anti-cheat data, Steam and the Steam Deck results) and whether it works with a c
 to see why, with sources. Right-click a game to hide it; **View > Bottles** (⌘2) shows the bottle
 pages below, and **View > Library** (⌘1) comes back.
 
+**Add a game from its installer or folder.** Drag the folder (or its setup `.exe`, `.msi` or an `.iso`) onto the
+Library or onto Stepover's Dock icon, or choose File > Add Game from Installer or Folder… (⌘O), and walk away.
+Its tile appears at once with whether it plays here, then says what is happening in plain words: Stepover makes
+the game a bottle of its own, runs the installer unattended (with the fixes installers need under Wine), adds what
+the game's files ask for, finds the game's program and comes back with Play. A folder that is already an installed
+game is copied in. Several folders install one after another. Stepover only runs the installer that is in the
+folder; it never downloads games. `stepover add <folder>` does the same from Terminal.
+
 1. **New Bottle.** A bottle is a Windows folder for one or more games.
 2. **Install Windows Program.** Pick the game's installer (`setup.exe` or `.msi`). When it
    finishes, the shortcuts it created become programs with a Play button.
@@ -50,7 +58,9 @@ pages below, and **View > Library** (⌘1) comes back.
 controller: each game's art, whether it plays here, and a big Play. Stepover opens in couch mode when a
 controller is connected, and Menu > Open at Login has it waiting when you log in. In a game, hold
 **Select + Start** for a second for Resume and Quit Game; the game pauses while that panel is up. Games open
-full screen on the main display; if the TV isn't it, Menu > Make This the Main Display. The Home button stays
+full screen on the main display; if the TV isn't it, Menu > Make This the Main Display. Menu > Add a Game lists
+the games waiting in your Downloads folder (once View > Let Couch Mode See Downloads has been chosen at the Mac,
+where macOS asks). The Home button stays
 with macOS, which uses it for Apple's Games app.
 
 Bottle settings cover MSync, High Resolution Mode (full Retina pixels) and Windows scaling. CrossOver
