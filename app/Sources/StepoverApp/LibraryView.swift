@@ -250,6 +250,8 @@ struct GameTile: View {
         case .steamGame(let app): return app.folder
         case .program(let program), .steamClient(let program):
             return WindowsPath.toMac(program.exe, bottle: game.bottle)?.deletingLastPathComponent() ?? game.bottle.cDrive
+        case .install:
+            return game.bottle.cDrive
         }
     }
 }

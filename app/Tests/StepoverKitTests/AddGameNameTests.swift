@@ -57,5 +57,8 @@ final class AddGameNameTests: XCTestCase {
         XCTAssertEqual(Recognize.existing(Recognized(name: "Hi-Fi RUSH", entry: index.entry(steam: 1817230)), in: [tiny, tile])?.id, tile.id)
         XCTAssertEqual(Recognize.existing(Recognized(name: "tiny game", entry: nil), in: [tile, tiny])?.id, tiny.id)
         XCTAssertNil(Recognize.existing(Recognized(name: "Other", entry: nil), in: [tile, tiny]))
+        let coming = LibraryGame(id: "install:j", name: "Other", bottle: bottle, kind: .install(InstallJob(source: "/x", name: "Other")),
+                                 entry: nil, lastPlayed: nil, steamAppID: nil, launch: Program(name: "Other", exe: ""))
+        XCTAssertNil(Recognize.existing(Recognized(name: "Other", entry: nil), in: [coming]))   // install tiles never count
     }
 }

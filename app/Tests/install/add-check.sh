@@ -52,6 +52,7 @@ check "High Resolution Mode on" grep -q '"RetinaMode"="y"' "$bottles/Tiny Game/u
 check "DPI 96" grep -q '"LogPixels"=dword:00000060' "$bottles/Tiny Game/user.reg"
 check "outcome recorded" test -f "$bottles/Tiny Game/stepover-install.json"
 check "the dropped folder is unchanged" test "$before" = "$(snapshot "$game")"
+check "the shared queue has it, done" python3 -I -c 'import json,sys; j=[x for x in json.load(open(sys.argv[1]))["jobs"] if x["name"]=="Tiny Game"]; sys.exit(0 if j and "done" in j[0]["stage"] else 1)' "$home/installs.json"
 
 # 2. NSIS
 add "$fixtures/Tiny NSIS Game"
@@ -75,6 +76,7 @@ count=$(bottle_count)
 add "$damaged"
 check "damaged files: says so" says "Some of the installer's files are damaged. Download them again, then Try Again."
 check "damaged files: exit 1, no bottle left" test $st -eq 1 -a "$(bottle_count)" = "$count"
+check "damaged files: the queue says so" python3 -I -c 'import json,sys; j=[x for x in json.load(open(sys.argv[1]))["jobs"] if x["name"]=="Damaged Game"]; sys.exit(0 if j and "damaged" in json.dumps(j[0]["stage"]) else 1)' "$home/installs.json"
 
 # 6. nothing to install, an archive, a download in progress
 add "$fixtures/Empty"

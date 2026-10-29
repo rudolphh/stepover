@@ -1,9 +1,10 @@
 import Foundation
 
-/// One tile in the Library: a program in a bottle, a game installed through Steam, or the Steam client.
+/// One tile in the Library: a program in a bottle, a game installed through Steam, the Steam client, or a game on
+/// its way in from an installer or folder.
 public struct LibraryGame: Identifiable, Hashable, Sendable {
-    public enum Kind: Hashable, Sendable { case program(Program), steamGame(SteamApp), steamClient(Program) }
-    public var id: String                 // "<bottle id>|<program name>", "<bottle id>|steam:<appid>", "<bottle id>|steam"
+    public enum Kind: Hashable, Sendable { case program(Program), steamGame(SteamApp), steamClient(Program), install(InstallJob) }
+    public var id: String                 // "<bottle id>|<program name>", "<bottle id>|steam:<appid>", "<bottle id>|steam", "install:<job id>"
     public var name: String
     public var bottle: Bottle
     public var kind: Kind
@@ -14,17 +15,21 @@ public struct LibraryGame: Identifiable, Hashable, Sendable {
     public var launch: Program
 
     public var isSteamClient: Bool { if case .steamClient = kind { return true } else { return false } }
+    public var install: InstallJob? { if case .install(let job) = kind { return job } else { return nil } }
 }
 
 /// Which games the Library shows (spec: Games appear by themselves), matched to the games list on the Mac.
 public enum Library {
     public static func games(bottles: [(bottle: Bottle, config: BottleConfig)], steamApps: (Bottle) -> [SteamApp],
-                             index: GameIndex, recent: [RecentGames.Entry], learned: GameIndex? = nil) -> [LibraryGame] {
+                             index: GameIndex, recent: [RecentGames.Entry], learned: GameIndex? = nil,
+                             installs: [InstallJob] = []) -> [LibraryGame] {
         func played(_ bottle: Bottle, _ name: String) -> Date? {
             recent.filter { $0.bottle == bottle.name && $0.program == name }.map(\.played).max()
         }
         var out: [LibraryGame] = []
-        for (bottle, config) in bottles {
+        // a game still on its way in has only its install tile, never a Play tile (spec anti-goals)
+        let unfinished = Set(installs.filter { !$0.isDone }.compactMap(\.bottle))
+        for (bottle, config) in bottles where !unfinished.contains(bottle.name) {
             let apps = steamApps(bottle)
             let client = config.programs.first { fileName($0.exe).lowercased() == "steam.exe" } ?? SteamLibrary.client(in: bottle)
             let games = apps.filter { !nonGames.contains($0.id) }
@@ -49,8 +54,15 @@ public enum Library {
                                        entry: nil, lastPlayed: played(bottle, client.name), steamAppID: nil, launch: client))
             }
         }
-        // played games newest first, then by name; the Steam client tiles last
-        return out.sorted { a, b in
+        let coming = installs.filter { !$0.isDone }.sorted { $0.added > $1.added }.map { job -> LibraryGame in
+            let entry = job.steam.flatMap { index.entry(steam: $0) } ?? index.match(name: job.name, exe: nil)
+                ?? learned?.match(name: job.name, exe: nil)
+            return LibraryGame(id: "install:\(job.id)", name: job.name,
+                               bottle: Bottle(url: Paths.bottles.appendingPathComponent(job.bottle ?? job.name)), kind: .install(job),
+                               entry: entry, lastPlayed: nil, steamAppID: job.steam ?? entry?.steam, launch: Program(name: job.name, exe: ""))
+        }
+        // games on their way in first, newest first; then played games newest first, then by name; the Steam client tiles last
+        return coming + out.sorted { a, b in
             if a.isSteamClient != b.isSteamClient { return !a.isSteamClient }
             switch (a.lastPlayed, b.lastPlayed) {
             case let (x?, y?) where x != y: return x > y

@@ -162,9 +162,24 @@ public struct GameWindow: Equatable, Sendable {
     }
 }
 
-public enum CouchAction: Equatable, Sendable { case play, resume, quitAndPlay(running: String), why, hide, unhide, back, menu, none }
+public enum CouchAction: Equatable, Sendable {
+    case play, resume, quitAndPlay(running: String), why, hide, unhide, back, menu, none
+    case tryAgain, installAnyway, playExisting(String), removeInstall     // on a game on its way in
+}
 
 public enum Couch {
+    /// A and B on a game on its way in (spec D12): Try Again or Remove on a failure, Install Anyway on the one firm no,
+    /// Play on a game that is already there.
+    public static func installAction(_ stage: InstallStage, button: CouchButton) -> CouchAction {
+        switch (stage, button) {
+        case (.failed, .a): return .tryAgain
+        case (.confirm, .a): return .installAnyway
+        case (.alreadyInLibrary(let id), .a): return .playExisting(id)
+        case (.failed, .b), (.confirm, .b), (.alreadyInLibrary, .b): return .removeInstall
+        default: return .none
+        }
+    }
+
     /// What A does on `selected` while `running` (a LibraryGame id) is running. While `starting` is on its way
     /// (started, not running yet), A waits: another press would start a second game.
     public static func primary(selected: String, running: String?, starting: String? = nil) -> CouchAction {
@@ -224,7 +239,7 @@ extension Couch {
             let exe = WindowsPath.fileName(program.exe).lowercased()
             let folder = String(program.exe.lowercased().dropLast(exe.count))
             return inBottle.filter { $0.exeName == exe || (folder.count > 3 && $0.windowsPath.lowercased().hasPrefix(folder)) }
-        case .steamClient:
+        case .steamClient, .install:
             return []
         }
     }

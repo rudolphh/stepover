@@ -27,9 +27,10 @@ public enum Recognize {
         entry.map { Verdicts.play($0).kind == .antiCheatBlocked } ?? false
     }
 
-    /// The Library tile this game already is: the same games-list entry, else the same normalized name.
+    /// The Library tile this game already is: the same games-list entry, else the same normalized name. Games still on
+    /// their way in don't count.
     public static func existing(_ game: Recognized, in library: [LibraryGame]) -> LibraryGame? {
-        let tiles = library.filter { !$0.isSteamClient }
+        let tiles = library.filter { !$0.isSteamClient && $0.install == nil }
         if let id = game.entry?.id, let tile = tiles.first(where: { $0.entry?.id == id }) { return tile }
         let name = GameName.normalized(game.name)
         return tiles.first { GameName.normalized($0.name) == name }

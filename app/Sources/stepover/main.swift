@@ -301,17 +301,37 @@ do {
                 print("\(found.name): \(Verdicts.play(found.entry).headline). \(InstallStage.confirm.text); add --anyway to install it.")
                 continue
             }
-            let job = UUID().uuidString
+            // the shared queue (installs.json), so the app shows this install too
+            var queue = InstallQueue.load()
+            let copied: Bool = { if case .installedGame = plan { return true } else { return false } }()
+            let held = queue.add(source: item, name: found.name, entryID: found.entry?.id, steam: found.entry?.steam, copiedGame: copied)
+            guard held.stage == .waiting, held.owner == nil else {
+                print("\(found.name): already on its way in (\(held.stage.text))")
+                continue
+            }
+            let job = held.id
             let name = AddGame.bottleName(for: found.name)
+            if let i = queue.jobs.firstIndex(where: { $0.id == job }) {
+                queue.jobs[i].owner = getpid()
+                queue.jobs[i].bottle = name
+                queue.jobs[i].stage = .gettingReady
+            }
+            try? queue.save()
             let printer = Printer()
             printer.say(found.name, InstallStage.gettingReady.text)
             do {
                 let bottle = try AddGame.makeBottle(named: name, job: job)
-                let result = try AddGame.run(plan, source: item, game: found.name, into: bottle, job: job,
-                                             knownExes: found.entry?.exes ?? [], report: { printer.say(found.name, $0.text) })
+                let result = try AddGame.run(plan, source: item, game: found.name, into: bottle, job: job, knownExes: found.entry?.exes ?? [],
+                                             report: { stage in
+                                                 InstallQueue.update(job) { $0.stage = stage }
+                                                 printer.say(found.name, stage.text)
+                                             })
+                InstallQueue.update(job) { $0.stage = .done(addOnFailed: result.addOnFailed) }
                 printer.say(found.name, "\(InstallStage.done(addOnFailed: result.addOnFailed).text): \(result.program.exe)")
             } catch {
-                printer.say(found.name, (error as? AddGameError)?.failure.text ?? error.localizedDescription)
+                let failure = (error as? AddGameError)?.failure ?? .installerError(error.localizedDescription)
+                InstallQueue.update(job) { $0.stage = .failed(failure); $0.bottle = nil }
+                printer.say(found.name, failure.text)
                 failed = true
                 try? AddGame.discard(bottleNamed: name, job: job)
             }
