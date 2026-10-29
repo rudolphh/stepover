@@ -125,16 +125,17 @@ struct VerdictPill: View {
     let text: String
     let tone: TileTone
     var large = false
+    var scale: CGFloat = 1   // couch mode reads from across the room
 
     var body: some View {
         let color = tone.color(scheme)
-        HStack(spacing: large ? 7 : 5) {
-            Circle().fill(color).frame(width: large ? 8 : 6, height: large ? 8 : 6)
+        HStack(spacing: (large ? 7 : 5) * scale) {
+            Circle().fill(color).frame(width: (large ? 8 : 6) * scale, height: (large ? 8 : 6) * scale)
             Text(text).lineLimit(large ? 2 : 1)
         }
-        .font(large ? .callout.weight(.semibold) : .caption.weight(.semibold))
+        .font(.system(size: (large ? 13 : 10.5) * scale, weight: .semibold))
         .foregroundStyle(color)
-        .padding(.horizontal, large ? 11 : 8).padding(.vertical, large ? 6 : 3)
+        .padding(.horizontal, (large ? 11 : 8) * scale).padding(.vertical, (large ? 6 : 3) * scale)
         .background(color.opacity(tone.pillAlpha), in: Capsule())
     }
 }

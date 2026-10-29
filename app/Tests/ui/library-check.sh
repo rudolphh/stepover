@@ -33,6 +33,7 @@ trap 'quit_test; rm -rf "$SCRATCH"' EXIT
 
 swiftc -O "$ROOT/app/Tests/ui/axdump.swift" -o "$AX" || exit 1
 defaults delete io.github.rudolphh.stepover.test 2>/dev/null   # the test copy's own remembered view
+defaults write io.github.rudolphh.stepover.test openInCouchMode -bool false   # a connected controller would open couch mode
 STEPOVER_APP="$APP" STEPOVER_BIN=none STEPOVER_BUNDLE_ID=io.github.rudolphh.stepover.test \
     zsh "$ROOT/app/build-app.sh" >/dev/null || { echo "FAIL build"; exit 1; }
 

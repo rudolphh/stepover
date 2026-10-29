@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import GameController
+import ServiceManagement
 import StepoverKit
 
 /// App state: bottles, their stepover.json, and what is running. Wine work runs off the main thread.
@@ -47,6 +48,16 @@ final class Store: ObservableObject {
     @Published var controllerName: String?
     /// The first runtime download failed; the toolbar offers Retry instead of an alert.
     @Published var runtimeFailed = false
+    // MARK: Couch mode
+    /// The Library full screen, driven by a controller (spec: 2026-10-28-couch-mode-design.md).
+    @Published var couchMode = false
+    /// The library game that's running (checked every 2 s while couch mode is on).
+    @Published var runningGame: LibraryGame?
+    /// A game that just ended while couch mode was on: couch mode comes back with it selected (C6).
+    @Published var endedGame: LibraryGame?
+    /// Open in couch mode when a controller is connected at launch (on unless switched off).
+    var openInCouchMode: Bool { UserDefaults.standard.object(forKey: "openInCouchMode") as? Bool ?? true }
+    private let launched = Date()
     private var gamesList: GamesList
     private var gameIndex: GameIndex
     private var artRequested: Set<Int> = []
@@ -243,6 +254,8 @@ final class Store: ObservableObject {
 
     private func updateController() {
         controllerName = GCController.controllers().first.map { $0.vendorName ?? "Game controller" }
+        // a controller already on as Stepover opens means the couch (C1); the setting turns that off
+        if controllerName != nil, openInCouchMode, Date().timeIntervalSince(launched) < 8, !couchMode { couchMode = true }
     }
 
     func refreshFixes() {
@@ -266,6 +279,48 @@ final class Store: ObservableObject {
     func refreshRunning() {
         let now = Set(bottles.filter(\.isRunning).map(\.id))
         if now != running { running = now }
+        if couchMode { updateRunningGame() }
+    }
+
+    func updateRunningGame() {
+        let current = Couch.running(library, processes: RunningPrograms.processes())
+        if let previous = runningGame, current == nil {
+            endedGame = previous
+            NSApp.activate()
+        }
+        if current?.id != runningGame?.id { runningGame = current }
+    }
+
+    /// Resume: the running game back in front (as the Dock menu's Bring to Front does).
+    func resume(_ game: LibraryGame) {
+        DockMenu.bringToFront(Couch.processes(of: game, in: RunningPrograms.processes()).map(\.pid))
+    }
+
+    /// Quit Game: just this game (a Steam game's own processes, else its bottle), then `then`.
+    func quitGame(_ game: LibraryGame, then: (() -> Void)? = nil) {
+        switch Couch.quitPlan(game, processes: RunningPrograms.processes()) {
+        case .processes(let pids):
+            for pid in pids { kill(pid, SIGTERM) }
+            Task {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                for pid in pids where kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+                updateRunningGame()
+                then?()
+            }
+        case .bottle(let bottle):
+            work(bottle, "Quitting \(game.name)", { try Launcher.stop(bottle) }, then: { self.updateRunningGame(); then?() })
+        }
+    }
+
+    var openAtLogin: Bool { SMAppService.mainApp.status == .enabled }
+
+    func setOpenAtLogin(_ on: Bool) {
+        do {
+            if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+        } catch {
+            alert = "Open at Login couldn't be changed: \(error.localizedDescription)"
+        }
+        objectWillChange.send()
     }
 
     func config(_ bottle: Bottle) -> BottleConfig { configs[bottle.id] ?? bottle.loadConfig() }

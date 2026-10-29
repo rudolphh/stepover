@@ -79,6 +79,7 @@ final class CouchTests: XCTestCase {
 
         XCTAssertEqual(Couch.running(games, processes: steamProcs)?.name, "Red Dead Redemption 2")
         XCTAssertEqual(Couch.quitPlan(rdr2Tile, processes: steamProcs), .processes([202]))   // not Steam, not explorer
+        XCTAssertEqual(Couch.processes(of: rdr2Tile, in: steamProcs).map(\.pid), [202])   // what Resume brings forward
         XCTAssertEqual(Couch.running(games, processes: sainthoodProcs)?.name, "Sainthood")
         XCTAssertEqual(Couch.quitPlan(sainthoodTile, processes: sainthoodProcs), .bottle(sainthood))
         XCTAssertNil(Couch.running(games, processes: [steamOnly]))     // Steam alone isn't a game running

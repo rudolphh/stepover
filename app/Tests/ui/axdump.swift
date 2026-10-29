@@ -2,6 +2,7 @@
 // once for Accessibility permission for the terminal running it).
 //   axdump <pid>                      prints each window's text: role, then title | value | description
 //   axdump <pid> - "<text>"           presses the button or menu item whose text is <text> or starts with "<text>,"
+//   axdump <pid> key <code>           sends one key press (virtual key code) to the app
 // Disabled controls end with " (disabled)". Sheets and dialogs are searched before the window under them.
 import ApplicationServices
 import Foundation
@@ -40,6 +41,15 @@ func sheets(_ e: AXUIElement) -> [AXUIElement] {
     return kids.filter { ["AXSheet", "AXDialog"].contains(attr($0, kAXRoleAttribute) as? String ?? "") } + kids.flatMap(sheets)
 }
 let windows = attr(app, kAXWindowsAttribute) as? [AXUIElement] ?? []
+// axdump <pid> key <code>: a key press (down and up) sent to that app (the scripted checks' controller stand-in)
+if CommandLine.arguments.count > 3, CommandLine.arguments[2] == "key", let code = CGKeyCode(CommandLine.arguments[3]) {
+    for down in [true, false] {
+        CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: down)?.postToPid(pid)
+        usleep(30_000)
+    }
+    print(">>> key \(code)")
+    exit(0)
+}
 if press != nil {
     for w in windows { for sheet in sheets(w) where press != nil { _ = findPress(sheet) } }
     if press != nil, let bar = attr(app, kAXMenuBarAttribute) { _ = findPress(bar as! AXUIElement) }

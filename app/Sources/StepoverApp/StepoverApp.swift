@@ -13,12 +13,18 @@ struct StepoverApp: App {
                 .environmentObject(store)
                 .onAppear { appDelegate.store = store }
                 .frame(minWidth: 880, minHeight: 560)
-                .alert("Stepover", isPresented: Binding(get: { store.alert != nil }, set: { if !$0 { store.alert = nil } })) {
+                // never a Mac alert while couch mode is up: it shows messages on the TV instead
+                .alert("Stepover", isPresented: Binding(get: { store.alert != nil && !store.couchMode }, set: { if !$0 { store.alert = nil } })) {
                     Button("OK") { store.alert = nil }
                 } message: { Text(store.alert ?? "") }
         }
         .commands {
             CommandGroup(before: .toolbar) {
+                Toggle("Couch Mode", isOn: Binding(get: { store.couchMode }, set: { store.couchMode = $0 }))
+                    .keyboardShortcut("f", modifiers: [.command, .shift])
+                Toggle("Open in Couch Mode with a Controller", isOn: Binding(
+                    get: { store.openInCouchMode }, set: { UserDefaults.standard.set($0, forKey: "openInCouchMode"); store.objectWillChange.send() }))
+                Divider()
                 Button("Library") { store.setView(bottles: false) }.keyboardShortcut("1")
                 Button("Bottles") { store.setView(bottles: true) }.keyboardShortcut("2")
                 Toggle("Show Hidden Games", isOn: Binding(get: { store.showHidden }, set: { store.showHidden = $0 }))
@@ -58,7 +64,7 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if store.showBottles { BottlesView() } else { LibraryView() }
+            if store.couchMode { CouchView() } else if store.showBottles { BottlesView() } else { LibraryView() }
         }
         .sheet(isPresented: $store.showFixSources) { FixSourcesSheet() }
         .sheet(isPresented: $store.showRuntimes) { RuntimesView() }

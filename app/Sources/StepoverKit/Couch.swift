@@ -65,15 +65,16 @@ extension Couch {
     /// The library game that's running: a Steam game when a non-system process in its bottle runs from its
     /// folder; a program when its exe runs in its bottle. The Steam client alone isn't a game running.
     public static func running(_ games: [LibraryGame], processes: [RunningPrograms.Process]) -> LibraryGame? {
-        games.first { !gameProcesses($0, processes).isEmpty }
+        games.first { !self.processes(of: $0, in: processes).isEmpty }
     }
 
     public static func quitPlan(_ game: LibraryGame, processes: [RunningPrograms.Process]) -> QuitPlan {
-        if case .steamGame = game.kind { return .processes(gameProcesses(game, processes).map(\.pid)) }
+        if case .steamGame = game.kind { return .processes(self.processes(of: game, in: processes).map(\.pid)) }
         return .bottle(game.bottle)
     }
 
-    static func gameProcesses(_ game: LibraryGame, _ processes: [RunningPrograms.Process]) -> [RunningPrograms.Process] {
+    /// The game's own processes: what Resume brings forward and what Quit Game ends for a Steam game.
+    public static func processes(of game: LibraryGame, in processes: [RunningPrograms.Process]) -> [RunningPrograms.Process] {
         let inBottle = RunningPrograms.inBottle(processes, bottlePath: game.bottle.url.path).filter { !$0.isSystem }
         switch game.kind {
         case .steamGame(let app):
