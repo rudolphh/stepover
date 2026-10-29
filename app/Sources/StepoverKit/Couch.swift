@@ -56,3 +56,34 @@ public enum Couch {
         return running == selected ? .resume : .quitAndPlay(running: running)
     }
 }
+
+/// How to quit just one game: a Steam game's own processes (Steam keeps running and syncs its cloud saves),
+/// else the game's bottle.
+public enum QuitPlan: Equatable, Sendable { case processes([Int32]), bottle(Bottle) }
+
+extension Couch {
+    /// The library game that's running: a Steam game when a non-system process in its bottle runs from its
+    /// folder; a program when its exe runs in its bottle. The Steam client alone isn't a game running.
+    public static func running(_ games: [LibraryGame], processes: [RunningPrograms.Process]) -> LibraryGame? {
+        games.first { !gameProcesses($0, processes).isEmpty }
+    }
+
+    public static func quitPlan(_ game: LibraryGame, processes: [RunningPrograms.Process]) -> QuitPlan {
+        if case .steamGame = game.kind { return .processes(gameProcesses(game, processes).map(\.pid)) }
+        return .bottle(game.bottle)
+    }
+
+    static func gameProcesses(_ game: LibraryGame, _ processes: [RunningPrograms.Process]) -> [RunningPrograms.Process] {
+        let inBottle = RunningPrograms.inBottle(processes, bottlePath: game.bottle.url.path).filter { !$0.isSystem }
+        switch game.kind {
+        case .steamGame(let app):
+            let folder = app.windowsFolder.lowercased() + "\\"
+            return inBottle.filter { $0.windowsPath.lowercased().hasPrefix(folder) }
+        case .program(let program):
+            let exe = WindowsPath.fileName(program.exe).lowercased()
+            return inBottle.filter { $0.exeName == exe }
+        case .steamClient:
+            return []
+        }
+    }
+}
