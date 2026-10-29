@@ -46,6 +46,13 @@ pages below, and **View > Library** (⌘1) comes back.
 6. **The Dock menu** (right-click Stepover in the Dock) has your recent games, every game by bottle,
    Run .exe… and Stop Everything. A running game is checked, with Bring to Front and Stop.
 
+**Couch mode** (View > Couch Mode, ⌘⇧F) turns the Library into a full-screen TV screen you drive with a
+controller: each game's art, whether it plays here, and a big Play. Stepover opens in couch mode when a
+controller is connected, and Menu > Open at Login has it waiting when you log in. In a game, hold
+**Select + Start** for a second for Resume and Quit Game; the game pauses while that panel is up. Games open
+full screen on the main display; if the TV isn't it, Menu > Make This the Main Display. The Home button stays
+with macOS, which uses it for Apple's Games app.
+
 Bottle settings cover MSync, High Resolution Mode (full Retina pixels) and Windows scaling. CrossOver
 bottles can be imported as instant copies; CrossOver's own bottle is not touched.
 

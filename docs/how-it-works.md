@@ -145,6 +145,50 @@ launch the runtime download starts by itself, Play (and New Bottle, on an empty 
 failed download offers Retry beside Your games. A tile's Settings opens its bottle page without changing
 what the app opens on; View > Library or Bottles (or the Library button) does. `app/Tests/ui/library-check.sh <games.json>` checks the screen through the accessibility tree.
 
+## Couch mode
+
+Couch mode (`CouchView`) is the Library full screen for a TV, driven by a controller: View > Couch Mode (⌘⇧F),
+or by itself when a controller connects within 8 s of launch (View > Open in Couch Mode with a Controller turns
+that off). It fills the display Stepover's window is on. Left and right (d-pad or stick) move along the row of
+games, A plays (Resume when it runs, "Quit X and Play" when another game runs), X opens Details (every reason
+with its source), Y hides a game or, with Show Hidden Games on, puts it back, and Menu (Start) has Make This the
+Main Display, Leave Couch Mode, Show Hidden Games, Stop Everything, Retry Download and Open at Login. The
+keyboard stands in: arrows, Return = A, Escape = B, Space = X, Delete = Y, Tab = Menu. No Mac alert opens while
+it's up; messages show on the screen with B to dismiss. The rules (focus movement, what A does, the shortcut,
+what counts as the game running) are in `Couch.swift` in StepoverKit, with tests.
+
+The screen shows the selected game's key art from Steam (`library_hero.jpg`), its logo (`logo.png`; a mostly
+dark logo, `LogoTone`, gives way to the typed name), the verdict and controller answers, Steam's short
+description (`GameAbout`, from appdetails, with a promotional lead-in dropped) and Play. They are fetched once
+per Steam game and kept in `<STEPOVER_HOME>/Art` beside the covers: `<id>-hero.jpg`, `<id>-logo.png`,
+`<id>-about.json`, and a `.none` marker for 30 days when Steam has none. Games without them keep the blurred
+cover and the typed name.
+
+After Play the button says "Starting <game>" and A waits until one of the game's processes appears (a Steam
+game's from its folder; a program's exe, or anything run from its folder, since launchers hand off, as Red Dead
+Redemption 2's does); it gives up after a minute. When the game's first real window opens (layer 0, at least
+640 by 360), Stepover brings it to the front, so a game that opens on another desktop or behind couch mode's
+full screen isn't out of sight. Games go full screen on the main display; when couch mode's display isn't the
+main one, a line says so and Menu > Make This the Main Display moves the displays' origins
+(`DisplayLayout.originsMakingMain`, `CGConfigureDisplayOrigin`).
+
+While a Stepover game runs, Stepover listens to the controller in the background
+(`GCController.shouldMonitorBackgroundEvents`). Holding Select + Start for a second shows a panel over the
+game (`InGamePanel`: a non-activating `NSPanel`, so the game keeps focus) with Resume and Quit Game. The game is
+paused while it's up (its processes get `SIGSTOP`), so the panel's buttons don't act in it; Resume continues it
+once every button is let go (`PausedGame`), and the game is continued if it ends or Stepover quits. Quit Game
+asks first, then ends just the game: a Steam game's own processes (Steam keeps running), else its bottle. Couch
+mode comes back with that game selected, reopening the window if it was closed; it does the same when a game
+ends by itself. Holding Start on 8BitDo controllers for about 3 s turns them off, which is why the hold is one
+second. The Home button stays with macOS (on macOS 26 holding it opens Apple's Games app); if macOS passes Home on to
+apps, holding it for half a second shows the panel too.
+
+Stopping a bottle (Quit Game, Stop, Stop Everything, `stepover stop`) ends the bottle's programs itself, then
+runs `wineserver -k`: `wineserver -k` alone gives up on the server after 10 s and left a hung or busy game
+running, frozen, with no server. `app/Tests/ui/couch-check.sh <games.json>` checks the screen through the
+accessibility tree and `app/Tests/ui/stop-check.sh` checks stopping; `STEPOVER_NO_CONTROLLER=1` makes a copy
+ignore controllers, so a controller in someone's hands can't press anything in a scripted check's test copy.
+
 ## Games list
 
 What Stepover knows about a game before anyone plays it here comes from one file, `games.json`, built
