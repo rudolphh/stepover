@@ -59,13 +59,51 @@ final class CouchTests: XCTestCase {
     // the hands-on test: the A that confirmed Quit also pressed A in the game. The game is paused while the panel
     // is up, and Resume continues it only once every button is let go (a held A would reach it on continuing)
     func testResumeWaitsForRelease() {
-        var paused = PausedGame()
-        XCTAssertFalse(paused.update([]))           // nothing asked to continue
-        paused.resume()
-        XCTAssertFalse(paused.update([.a]))         // the A that chose Resume is still down
-        XCTAssertFalse(paused.update([.a, .b]))
-        XCTAssertTrue(paused.update([]))            // all let go: continue now
-        XCTAssertFalse(paused.update([]))           // once
+        var pause = InGamePause()
+        XCTAssertEqual(pause.update([]), [])                     // nothing paused
+        XCTAssertEqual(pause.pause("a", pids: [1, 2]), [1, 2])
+        pause.resume()
+        XCTAssertEqual(pause.update([.a]), [])                   // the A that chose Resume is still down
+        XCTAssertEqual(pause.update([.a, .b]), [])
+        XCTAssertEqual(pause.update([]), [1, 2])                 // all let go: continue now
+        XCTAssertEqual(pause.update([]), [])                     // once
+    }
+
+    // final review I1, I2: a paused game is never left paused
+    func testAPausedGameIsAlwaysContinued() {
+        var pause = InGamePause()
+        _ = pause.pause("a", pids: [1])
+        XCTAssertEqual(pause.watching("a"), [])                  // still the same game
+        XCTAssertEqual(pause.watching("b"), [1])                 // another game took over: continue it now
+        _ = pause.pause("a", pids: [3])
+        XCTAssertEqual(pause.watching(nil), [3])                 // the game is gone
+        _ = pause.pause("a", pids: [4])
+        XCTAssertEqual(pause.quit(), [4])                        // a stopped process can't take a quit signal
+        XCTAssertEqual(pause.update([]), [])
+        // a second shortcut right after Resume, a button still down: the pending Resume doesn't continue it under the panel
+        _ = pause.pause("a", pids: [5])
+        pause.resume()
+        XCTAssertEqual(pause.pause("a", pids: [5]), [5])
+        XCTAssertEqual(pause.update([]), [])
+        XCTAssertEqual(pause.paused, [5])
+    }
+
+    // final review I1: quitting a Steam game continues its processes first, asks them to end, and finishes as soon as
+    // they're gone, killing what's left after the grace period
+    func testEndingProcesses() async {
+        final class Log: @unchecked Sendable { var signals: [String] = []; var alive: Set<Int32> = [7, 8]; var ticks = 0 }
+        let log = Log()
+        await ProcessEnd.end([7, 8], grace: 1, step: 0.25,
+                             signal: { pid, sig in log.signals.append("\(pid):\(sig)"); if sig == SIGKILL { log.alive.remove(pid) } },
+                             alive: { log.alive.contains($0) },
+                             sleep: { _ in log.ticks += 1; if log.ticks == 2 { log.alive.remove(7) } })
+        XCTAssertEqual(Array(log.signals.prefix(4)), ["7:\(SIGCONT)", "7:\(SIGTERM)", "8:\(SIGCONT)", "8:\(SIGTERM)"])
+        XCTAssertEqual(log.signals.last, "8:\(SIGKILL)")         // 8 ignored SIGTERM through the grace period
+        XCTAssertFalse(log.signals.contains("7:\(SIGKILL)"))     // 7 ended by itself
+        log.alive = [9]; log.signals = []; log.ticks = 0
+        await ProcessEnd.end([9], grace: 5, step: 0.25, signal: { pid, sig in log.signals.append("\(pid):\(sig)") },
+                             alive: { log.alive.contains($0) }, sleep: { _ in log.ticks += 1; log.alive.removeAll() })
+        XCTAssertEqual(log.ticks, 1)                              // gone at the first look: no waiting out the grace period
     }
 
     // the hands-on test: with several desktops (or couch mode's full screen) a started game opened out of sight
@@ -124,6 +162,50 @@ final class CouchTests: XCTestCase {
         let rootTile = LibraryGame(id: "r|Root", name: "Root", bottle: rdr2, kind: .program(root),
                                    entry: nil, lastPlayed: nil, steamAppID: nil, launch: root)
         XCTAssertNil(Couch.running([rootTile], processes: [launcher]))
+    }
+
+    // final review I2: a game a previous Stepover left paused (it crashed or was force quit with the panel up) is found
+    func testStrayPausedGame() {
+        let rdr2 = bottle("RDR2")
+        let program = Program(name: "Red Dead Redemption 2", exe: #"C:\Program Files\Red Dead Redemption 2\RDR2.exe"#)
+        let tile = LibraryGame(id: "r|Red Dead Redemption 2", name: "Red Dead Redemption 2", bottle: rdr2, kind: .program(program),
+                               entry: nil, lastPlayed: nil, steamAppID: nil, launch: program)
+        let game = RunningPrograms.Process(pid: 1, windowsPath: "RDR2.exe", cwd: cwd(rdr2))
+        let wine = RunningPrograms.Process(pid: 2, windowsPath: #"C:\windows\system32\services.exe"#, cwd: cwd(rdr2))
+        let stopped: Set<Int32> = [1, 2]
+        XCTAssertEqual(Couch.strayPaused([tile], processes: [game, wine], isStopped: { stopped.contains($0) }, ours: []), [1])
+        XCTAssertEqual(Couch.strayPaused([tile], processes: [game, wine], isStopped: { stopped.contains($0) }, ours: [1]), [])
+        XCTAssertEqual(Couch.strayPaused([tile], processes: [game], isStopped: { _ in false }, ours: []), [])
+    }
+
+    func testStoppedProcess() throws {
+        let sleeper = Foundation.Process()
+        sleeper.executableURL = URL(fileURLWithPath: "/bin/sleep"); sleeper.arguments = ["30"]
+        try sleeper.run()
+        defer { kill(sleeper.processIdentifier, SIGCONT); sleeper.terminate() }
+        let pid = sleeper.processIdentifier
+        XCTAssertFalse(RunningPrograms.isStopped(pid))
+        kill(pid, SIGSTOP); usleep(200_000)
+        XCTAssertTrue(RunningPrograms.isStopped(pid))
+        kill(pid, SIGCONT); usleep(200_000)
+        XCTAssertFalse(RunningPrograms.isStopped(pid))
+    }
+
+    // final review I5: a Steam game whose exe hands off to a bare-named copy of itself is still running and quit whole
+    func testSteamGameRunningAfterItsExeHandsOff() throws {
+        let steam = bottle("Steam")
+        let folder = #"C:\Program Files (x86)\Steam\steamapps\common\Red Dead Redemption 2"#
+        let mac = try XCTUnwrap(WindowsPath.toMac(folder, bottle: steam))
+        try FileManager.default.createDirectory(at: mac, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: mac.appendingPathComponent("RDR2.exe").path, contents: Data())
+        let app = SteamApp(id: 1174180, name: "Red Dead Redemption 2", folder: mac, windowsFolder: folder)
+        let client = Program(name: "Steam", exe: #"C:\Program Files (x86)\Steam\steam.exe"#)
+        let tile = LibraryGame(id: "s|steam:1174180", name: "Red Dead Redemption 2", bottle: steam, kind: .steamGame(app),
+                               entry: nil, lastPlayed: nil, steamAppID: 1174180, launch: client)
+        let bare = RunningPrograms.Process(pid: 3, windowsPath: "RDR2.exe", cwd: cwd(steam))
+        let other = RunningPrograms.Process(pid: 4, windowsPath: "Other.exe", cwd: cwd(steam))
+        XCTAssertEqual(Couch.running([tile], processes: [bare])?.id, tile.id)
+        XCTAssertEqual(Couch.quitPlan(tile, processes: [bare, other]), .processes([3]))
     }
 
     func testRunningGameAndQuitPlan() {

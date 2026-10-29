@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// Couch mode's rules: moving along the row of games, the controller shortcut that brings up the in-game
@@ -78,20 +79,56 @@ public struct PressTracker: Sendable {
     }
 }
 
-/// The game is paused while the in-game panel is up, so the panel's buttons never act in it. Resume continues it
-/// only once every button is let go: an A still held when the game continues would reach it.
-public struct PausedGame: Sendable {
+/// The in-game panel's pause: the game's processes are stopped while the panel is up, so the panel's buttons never
+/// act in it. Resume continues them once every button is let go (an A still held when the game continues would reach
+/// it); a quit, the game ending or another game taking over continues them at once. Pure: the app sends the signals.
+public struct InGamePause: Sendable {
+    public private(set) var paused: [Int32] = []
+    private var game: String?
     private var resuming = false
 
     public init() {}
 
-    public mutating func resume() { resuming = true }
+    /// The panel shows over `game`: stop these (and forget any Resume still waiting for buttons to be let go).
+    public mutating func pause(_ game: String, pids: [Int32]) -> [Int32] {
+        self.game = game; paused = pids; resuming = false
+        return pids
+    }
 
-    /// True once, when the game should continue.
-    public mutating func update(_ pressed: Set<CouchButton>) -> Bool {
-        guard resuming, pressed.isEmpty else { return false }
-        resuming = false
-        return true
+    public mutating func resume() { resuming = !paused.isEmpty }
+
+    /// Each poll of the controller: what to continue now.
+    public mutating func update(_ pressed: Set<CouchButton>) -> [Int32] {
+        guard resuming, pressed.isEmpty else { return [] }
+        return release()
+    }
+
+    /// The running game, as Store sees it every 2 s: a different one, or none, continues what was paused.
+    public mutating func watching(_ game: String?) -> [Int32] { game == self.game ? [] : release() }
+
+    /// Quit Game: continue them first, since a stopped process can't take a signal to end.
+    public mutating func quit() -> [Int32] { release() }
+
+    private mutating func release() -> [Int32] {
+        defer { paused = []; game = nil; resuming = false }
+        return paused
+    }
+}
+
+/// Ending a Steam game's own processes (Steam keeps running): continued (a paused one can't take SIGTERM), asked to
+/// end, and killed if still there after `grace` seconds; done as soon as they're all gone.
+public enum ProcessEnd {
+    public static func end(_ pids: [Int32], grace: Double = 5, step: Double = 0.25,
+                           signal: @Sendable (Int32, Int32) -> Void = { _ = kill($0, $1) },
+                           alive: @Sendable (Int32) -> Bool = { kill($0, 0) == 0 },
+                           sleep: @Sendable (Double) async -> Void = { try? await Task.sleep(for: .seconds($0)) }) async {
+        for pid in pids { signal(pid, SIGCONT); signal(pid, SIGTERM) }
+        var waited = 0.0
+        while waited < grace, pids.contains(where: alive) {
+            await sleep(step)
+            waited += step
+        }
+        for pid in pids where alive(pid) { signal(pid, SIGKILL) }
     }
 }
 
@@ -157,6 +194,13 @@ extension Couch {
         games.first { !self.processes(of: $0, in: processes).isEmpty }
     }
 
+    /// Library games' processes left stopped by something other than this run of Stepover's panel (`ours`): a
+    /// previous Stepover that crashed or was force quit with the panel up. Continuing them is the way out.
+    public static func strayPaused(_ games: [LibraryGame], processes: [RunningPrograms.Process],
+                                   isStopped: (Int32) -> Bool, ours: [Int32]) -> [Int32] {
+        games.flatMap { self.processes(of: $0, in: processes) }.map(\.pid).filter { !ours.contains($0) && isStopped($0) }
+    }
+
     public static func quitPlan(_ game: LibraryGame, processes: [RunningPrograms.Process]) -> QuitPlan {
         if case .steamGame = game.kind { return .processes(self.processes(of: game, in: processes).map(\.pid)) }
         return .bottle(game.bottle)
@@ -168,7 +212,13 @@ extension Couch {
         switch game.kind {
         case .steamGame(let app):
             let folder = app.windowsFolder.lowercased() + "\\"
-            return inBottle.filter { $0.windowsPath.lowercased().hasPrefix(folder) }
+            // or a bare-named exe that's in the game's folder: a launcher there can start the game by name
+            return inBottle.filter { process in
+                if process.windowsPath.lowercased().hasPrefix(folder) { return true }
+                guard RunningPrograms.isWindowsPath(process.windowsPath) == false,
+                      let file = WindowsPath.toMac(app.windowsFolder + "\\" + process.windowsPath, bottle: game.bottle) else { return false }
+                return FileManager.default.fileExists(atPath: file.path)
+            }
         case .program(let program):
             // its exe, or anything from its folder: a game can hand off to a launcher there and exit
             let exe = WindowsPath.fileName(program.exe).lowercased()

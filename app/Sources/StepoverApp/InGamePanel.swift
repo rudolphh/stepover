@@ -17,23 +17,24 @@ final class InGamePanel {
     private var menu = InGameMenu()
     private var timer: Timer?
     private var panel: NSPanel?
-    private var paused = PausedGame()
-    private var stopped: [Int32] = []   // the game's processes, paused while the panel is up
+    private var pause = InGamePause()
+    /// The processes this panel has paused (Store leaves these alone when it continues stray paused games).
+    var paused: [Int32] { pause.paused }
 
     init(store: Store) {
         self.store = store
         // never leave a game paused behind
         NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.continueGame() }
+            MainActor.assumeIsolated { if let self { Self.continueNow(self.pause.quit()) } }
         }
     }
 
     /// Background listening on while `game` runs, off otherwise; the panel goes away with the game.
     func watch(_ game: LibraryGame?) {
+        if game?.id != self.game?.id, panel != nil { close() }   // the panel was about a game that's gone or replaced
+        Self.continueNow(pause.watching(game?.id))
         self.game = game
         if game == nil {
-            close()
-            continueGame()
             timer?.invalidate()
             timer = nil
             GCController.shouldMonitorBackgroundEvents = false
@@ -50,7 +51,7 @@ final class InGamePanel {
         let pressed = GCController.couchPad?.couchButtons ?? []
         let now = Date().timeIntervalSinceReferenceDate
         let shortcut = detector.update(pressed, at: now)
-        if paused.update(pressed) { continueGame() }
+        Self.continueNow(pause.update(pressed))
         guard panel != nil else {
             // only the shortcut counts, and only while the game is in front (couch mode has its own Menu)
             if shortcut, !NSApp.isActive { show() }
@@ -65,10 +66,10 @@ final class InGamePanel {
         case .none: layout()
         case .resume:
             close()
-            paused.resume()
+            pause.resume()
         case .quit:
             close()
-            stopped = []   // quitting ends them paused or not
+            _ = pause.quit()   // quitting ends them: a Steam game's are continued first (ProcessEnd), a bottle's killed
             guard let game else { return }
             store.quitGame(game) { [store] in store.comeBack(after: game) }
         }
@@ -87,13 +88,12 @@ final class InGamePanel {
         self.panel = panel
         layout()
         panel.orderFrontRegardless()
-        stopped = Couch.processes(of: game, in: RunningPrograms.processes()).map(\.pid)
-        for pid in stopped { kill(pid, SIGSTOP) }
+        let pids = Couch.processes(of: game, in: RunningPrograms.processes()).map(\.pid)
+        for pid in pause.pause(game.id, pids: pids) { kill(pid, SIGSTOP) }
     }
 
-    private func continueGame() {
-        for pid in stopped { kill(pid, SIGCONT) }
-        stopped = []
+    private static func continueNow(_ pids: [Int32]) {
+        for pid in pids { kill(pid, SIGCONT) }
     }
 
     /// Sized for the game's screen (games go full screen on the main display, C2b) and centered on it.

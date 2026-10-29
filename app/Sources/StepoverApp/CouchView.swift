@@ -41,7 +41,9 @@ struct CouchView: View {
         if let screen, !isMain(screen) { items.append(("Make This the Main Display", nil, { store.makeMainDisplay(screen); self.screen = screen })) }
         items.append(("Leave Couch Mode", nil, { store.couchMode = false }))
         items.append((store.showHidden ? "Hide Hidden Games" : "Show Hidden Games", nil, { store.showHidden.toggle() }))
-        if let running = store.runningGame { items.append(("Stop Everything", nil, { store.quitGame(running) })) }
+        if !store.running.isEmpty {   // as the Dock's: every running bottle, Steam included
+            items.append(("Stop Everything", nil, { store.bottles.filter(\.isRunning).forEach(store.stop) }))
+        }
         if !store.runtimeReady && store.runtimeFailed { items.append(("Retry Download", nil, { store.installRuntime() })) }
         items.append((store.openAtLogin ? "Open at Login: On" : "Open at Login: Off",
                       "Opens Stepover when you log in to this Mac, so couch mode is ready without the mouse.",

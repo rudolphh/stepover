@@ -50,6 +50,7 @@ final class Store: ObservableObject {
     @Published var logo: [Int: NSImage] = [:]
     @Published var about: [Int: GameAbout] = [:]
     private var lookRequested: Set<Int> = []
+    private var checkedStrayPaused = false
     /// The first connected game controller's name, nil when none.
     @Published var controllerName: String?
     /// The first runtime download failed; the toolbar offers Retry instead of an alert.
@@ -243,7 +244,11 @@ final class Store: ObservableObject {
                 let hero = await GameArt.fetch(id, kind: .hero).flatMap { try? Data(contentsOf: $0) }
                 let logo = await GameArt.fetch(id, kind: .logo).flatMap { try? Data(contentsOf: $0) }
                 let lightLogo = logo.flatMap { LogoTone.isDark($0) == false ? $0 : nil }
+                let asked = ["\(id)-about.json", "\(id)-about.none"].contains {
+                    FileManager.default.fileExists(atPath: GameArt.folder.appendingPathComponent($0).path)
+                }
                 let about = await GameAbout.fetch(id)
+                if !asked { try? await Task.sleep(for: .seconds(1.5)) }   // Steam limits appdetails, as LearnedGames does
                 await MainActor.run {
                     if let hero, let image = NSImage(data: hero) { self.keyArt[id] = image }
                     if let lightLogo, let image = NSImage(data: lightLogo) { self.logo[id] = image }
@@ -272,17 +277,21 @@ final class Store: ObservableObject {
     /// Brings a game Stepover just started in front once it has a window: macOS leaves one that opens on another
     /// desktop, or behind couch mode's full screen, out of sight. Gives up after two minutes.
     private func showWhenItOpens(_ game: LibraryGame) {
-        Task { [weak self] in
+        // off the main thread: listing every window takes ~30 ms
+        Task.detached { [weak self] in
             for _ in 0..<240 {
                 try? await Task.sleep(for: .milliseconds(500))
                 guard self != nil else { return }
                 let pids = Couch.processes(of: game, in: RunningPrograms.processes()).map(\.pid)
-                if !pids.isEmpty, Couch.hasGameWindow(pids: pids, windows: Self.windows()) { DockMenu.bringToFront(pids); return }
+                if !pids.isEmpty, Couch.hasGameWindow(pids: pids, windows: Store.windows()) {
+                    await MainActor.run { DockMenu.bringToFront(pids) }
+                    return
+                }
             }
         }
     }
 
-    private static func windows() -> [GameWindow] {
+    nonisolated private static func windows() -> [GameWindow] {
         let list = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] ?? []
         return list.compactMap { info in
             guard let pid = (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
@@ -344,7 +353,18 @@ final class Store: ObservableObject {
         }
     }
 
+    /// Continues a game a previous Stepover left paused (it crashed or was force quit with the in-game panel up).
+    private func continueStrayPaused(_ processes: [RunningPrograms.Process]) {
+        for pid in Couch.strayPaused(library, processes: processes, isStopped: RunningPrograms.isStopped, ours: inGame.paused) {
+            kill(pid, SIGCONT)
+        }
+    }
+
     func refreshRunning() {
+        if !checkedStrayPaused, !library.isEmpty {   // once at launch, whatever mode; then with each running-game check
+            checkedStrayPaused = true
+            continueStrayPaused(RunningPrograms.processes())
+        }
         let now = Set(bottles.filter(\.isRunning).map(\.id))
         if now != running { running = now }
         // the running game matters to couch mode and, with a controller on, to the in-game panel
@@ -352,7 +372,9 @@ final class Store: ObservableObject {
     }
 
     func updateRunningGame() {
-        let current = Couch.running(library, processes: RunningPrograms.processes())
+        let processes = RunningPrograms.processes()
+        continueStrayPaused(processes)
+        let current = Couch.running(library, processes: processes)
         if let previous = runningGame, current == nil, couchMode { comeBack(after: previous) }
         if current?.id != runningGame?.id { runningGame = current }
         if let current, current.id == starting?.id { starting = nil }
@@ -361,8 +383,7 @@ final class Store: ObservableObject {
 
     /// Couch mode in front again after a game (C6), with that game selected; reopens the window if it was closed.
     func comeBack(after game: LibraryGame) {
-        endedGame = game
-        couchMode = true
+        endedGame = game   // Stepover comes back in the mode it was in (Quit Game from the panel works in the Library too)
         if !NSApp.windows.contains(where: { $0.isVisible && $0.canBecomeMain }) {
             // opening a running app is a reopen, which SwiftUI answers with a new window when none is open
             NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: NSWorkspace.OpenConfiguration())
@@ -382,10 +403,8 @@ final class Store: ObservableObject {
         else { Launcher.appendLog(game.bottle, "quitting \(game.name): stopping its bottle") }
         switch plan {
         case .processes(let pids):
-            for pid in pids { kill(pid, SIGTERM) }
             Task {
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
-                for pid in pids where kill(pid, 0) == 0 { kill(pid, SIGKILL) }
+                await ProcessEnd.end(pids)   // continued first: the in-game panel may have them paused
                 updateRunningGame()
                 then?()
             }

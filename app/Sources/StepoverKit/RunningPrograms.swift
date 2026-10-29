@@ -37,6 +37,14 @@ public enum RunningPrograms {
         return processes.filter { $0.cwd.hasPrefix(root) }
     }
 
+    /// Whether the process is stopped (SIGSTOP), as a game is while the in-game panel is up.
+    public static func isStopped(_ pid: Int32) -> Bool {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return false }
+        return info.pbi_status == UInt32(SSTOP)
+    }
+
     /// A Windows path, or a bare exe name: a program started by name has no path (Rockstar's launcher starts
     /// "RDR2.exe"). Its working directory still places it in a bottle.
     static func isProgramName(_ s: String) -> Bool {
