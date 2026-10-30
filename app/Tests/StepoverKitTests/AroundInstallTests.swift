@@ -82,6 +82,16 @@ final class AroundInstallTests: XCTestCase {
         try BottleSetup.makePublicDownloads(bottle)   // again: already there is fine
     }
 
+    func testLaunchMakesPublicDownloadsInOlderBottles() throws {
+        setenv("STEPOVER_FIXES", dir.appendingPathComponent("fixes").path, 1)
+        setenv("STEPOVER_LOGS", dir.appendingPathComponent("logs").path, 1)
+        defer { unsetenv("STEPOVER_FIXES"); unsetenv("STEPOVER_LOGS") }
+        let bottle = Bottle(url: dir.appendingPathComponent("bottle"))
+        try fm.createDirectory(at: bottle.cDrive.appendingPathComponent("users/Public/Documents"), withIntermediateDirectories: true)
+        try Launcher.prepare(bottle: bottle, config: BottleConfig(), runtime: Runtime(url: dir.appendingPathComponent("runtime")))
+        XCTAssertTrue(fm.fileExists(atPath: bottle.cDrive.appendingPathComponent("users/Public/Downloads").path))
+    }
+
     func testPersonalFoldersInside() throws {
         let home = dir.appendingPathComponent("home/Documents")
         try fm.createDirectory(at: home, withIntermediateDirectories: true)

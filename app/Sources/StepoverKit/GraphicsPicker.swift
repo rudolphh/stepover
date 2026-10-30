@@ -23,6 +23,10 @@ public enum GraphicsPicker {
     ]
 
     public static func pick(exe: URL) -> Pick {
+        // A program's picked backend wins over a built-in fix's, so the two must agree.
+        if let fix = BuiltInFixes.fix(for: exe), let backend = fix.rule.graphics {
+            return Pick(backend: backend, env: [:], reason: fix.why)
+        }
         let name = exe.lastPathComponent.lowercased()
         if let known = known[name] { return known }
         guard let pe = PEFile(url: exe) else {

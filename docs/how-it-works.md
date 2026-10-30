@@ -47,8 +47,10 @@ Direct3D 10.1. D3DMetal doesn't offer it, and DXVK and wined3d's default Vulkan 
 geometry shaders MoltenVK lacks (wined3d on Vulkan stops at 9.3), so it runs on wined3d with
 `WINE_D3D_CONFIG=renderer=gl`, which gives 10.1 on OpenGL.
 
-New bottles also get `C:\users\Public\Downloads`, which Windows makes at setup and Wine doesn't
-(Rockstar's launcher service fails without `FOLDERID_PublicDownloads`).
+Every bottle gets `C:\users\Public\Downloads` (when it's made and before each launch), which Windows
+makes at setup and Wine doesn't (Rockstar's launcher service fails without `FOLDERID_PublicDownloads`).
+Install and Add Game pick a program's graphics with the built-in fixes in mind, since a program's
+backend wins over a built-in fix's.
 
 ## Wine patches
 

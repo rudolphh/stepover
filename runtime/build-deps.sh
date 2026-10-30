@@ -136,7 +136,9 @@ build_ffmpeg() {
 
 build_libinotify() {
     log libinotify
-    # inotify over kqueue, for wineserver's folder-change notifications (ReadDirectoryChangesW)
+    # inotify over kqueue, for wineserver's folder-change notifications (ReadDirectoryChangesW). Built like
+    # CrossOver's copy, without --enable-skip-subfiles: a watch for file writes opens every file in the watched
+    # folders (one descriptor each), which skipping would avoid at the cost of never reporting writes.
     fetch https://github.com/libinotify-kqueue/libinotify-kqueue/releases/download/20240724/libinotify-20240724.tar.gz \
         5cc3fb7af407b17b7daa871cc98bb882716c4b5c296fadfb66bfe86c37cc599c libinotify-20240724.tar.gz
     untar libinotify libinotify-20240724.tar.gz

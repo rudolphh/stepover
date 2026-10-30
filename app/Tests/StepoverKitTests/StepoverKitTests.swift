@@ -59,6 +59,20 @@ final class StepoverKitTests: XCTestCase {
         XCTAssertFalse(conf.contains("[launcher.exe]"))
     }
 
+    func testPickedGraphicsForTheRockstarLauncherKeepItsBuiltInFix() {
+        // Install and Add Game record the launcher as a program with a picked backend; that pick must agree with the
+        // built-in fix, or the program's graphics would win and the launcher would draw nothing again.
+        let pick = GraphicsPicker.pick(exe: URL(fileURLWithPath: "/tmp/b/drive_c/Program Files/Rockstar Games/Launcher/Launcher.exe"))
+        XCTAssertEqual(pick.backend, .wined3d)
+        var config = BottleConfig(graphics: .d3dmetal)
+        config.programs = [Program(name: "Rockstar Games Launcher", exe: #"C:\Program Files\Rockstar Games\Launcher\Launcher.exe"#,
+                                   graphics: pick.backend)]
+        XCTAssertTrue(config.compatConf().contains(#"[c:\program files\rockstar games\launcher\launcher.exe]"#
+            + "\nbackend = wined3d\nenv = WINE_D3D_CONFIG=renderer=gl\n"))
+        // another game's Launcher.exe is picked on its own merits
+        XCTAssertNotEqual(GraphicsPicker.pick(exe: URL(fileURLWithPath: "/tmp/b/drive_c/Games/Other/Launcher.exe")).backend, .wined3d)
+    }
+
     func testRockstarSocialClubDrawsInItsOwnProcess() {
         let conf = BottleConfig(graphics: .d3dmetal).compatConf()
         XCTAssertTrue(conf.contains("[socialclubhelper.exe]\nbackend = d3dmetal\nargs = --in-process-gpu\n"), conf)
