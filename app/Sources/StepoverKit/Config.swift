@@ -178,11 +178,15 @@ public struct BottleConfig: Codable, Sendable {
         }
         // The user's own rules, by file name
         var user: [String: Section] = [:]
+        // A program's own WINEDLLOVERRIDES also goes out as dll lines: Wine reads the variable before the plug-in
+        // can set it, while the plug-in hands dll lines to the loader directly.
         for program in programs {
-            user[program.exeName.asciiLowercased, default: Section()].layer(backend: program.graphics, env: program.env)
+            user[program.exeName.asciiLowercased, default: Section()].layer(
+                backend: program.graphics, env: program.env, dlls: Self.dllOverrides(program.env["WINEDLLOVERRIDES"]))
         }
         for (exe, rule) in processes {
-            user[exe.asciiLowercased, default: Section()].layer(backend: rule.graphics, env: rule.env, args: rule.args)
+            user[exe.asciiLowercased, default: Section()].layer(
+                backend: rule.graphics, env: rule.env, dlls: Self.dllOverrides(rule.env["WINEDLLOVERRIDES"]), args: rule.args)
         }
         for (key, rule) in user {
             let mine = Self.overriddenDlls(rule.env["WINEDLLOVERRIDES"])
@@ -220,6 +224,32 @@ public struct BottleConfig: Codable, Sendable {
 
     static func isSectionName(_ key: String) -> Bool {
         !key.isEmpty && key != "*" && isOneLine(key) && !key.contains("[") && !key.contains("]")
+    }
+
+    /// A WINEDLLOVERRIDES value as fix-style load orders: "d3d9,ddraw=n,b;dinput8=" gives d3d9 and ddraw
+    /// "native,builtin", dinput8 "disabled". Entries with a load order Wine wouldn't take are left out.
+    static func dllOverrides(_ value: String?) -> [String: String] {
+        guard let value else { return [:] }
+        var out: [String: String] = [:]
+        for entry in value.split(separator: ";") {
+            let parts = entry.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2 else { continue }
+            let raw = parts[1].trimmingCharacters(in: .whitespaces).asciiLowercased
+            let order: String
+            if raw.isEmpty || raw == "d" || raw == "disabled" {
+                order = "disabled"
+            } else {
+                let modes = raw.split(separator: ",").map { $0 == "n" || $0 == "native" ? "native" : $0 == "b" || $0 == "builtin" ? "builtin" : "" }
+                guard !modes.contains("") else { continue }
+                order = modes.joined(separator: ",")
+            }
+            for name in parts[0].split(separator: ",") {
+                var dll = name.trimmingCharacters(in: .whitespaces).asciiLowercased
+                if dll.hasSuffix(".dll") { dll.removeLast(4) }
+                if !dll.isEmpty && isOneLine(dll) { out[dll] = order }
+            }
+        }
+        return out
     }
 
     /// DLL names in a WINEDLLOVERRIDES value ("d3d9,ddraw=n,b;dinput8=d").

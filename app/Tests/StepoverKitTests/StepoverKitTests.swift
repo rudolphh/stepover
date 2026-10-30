@@ -86,6 +86,18 @@ final class StepoverKitTests: XCTestCase {
             + "\nbackend = dxvk\nenv = WINE_D3D_CONFIG=renderer=gl\n"), conf)
     }
 
+    func testOwnDllOverridesReachWinesLoader() {
+        // Wine reads WINEDLLOVERRIDES before the compat plug-in can set it, so a program's or process's own value
+        // also goes out as dll lines, which the plug-in applies to the loader directly.
+        var config = BottleConfig(graphics: .d3dmetal)
+        config.processes = ["GTA5_Enhanced.exe": ProcessRule(env: ["WINEDLLOVERRIDES": "xinput1_4=n,b;d3d9,DDraw.dll=b;dinput8="])]
+        config.programs = [Program(name: "Game", exe: #"C:\Games\game.exe"#, env: ["WINEDLLOVERRIDES": "dsound=native"])]
+        let conf = config.compatConf()
+        XCTAssertTrue(conf.contains("[gta5_enhanced.exe]\nbackend = d3dmetal\nenv = WINEDLLOVERRIDES=xinput1_4=n,b;d3d9,DDraw.dll=b;dinput8=\n"
+            + "dll = d3d9=b\ndll = ddraw=b\ndll = dinput8=\ndll = xinput1_4=n,b\n"), conf)
+        XCTAssertTrue(conf.contains("[game.exe]\nbackend = d3dmetal\nenv = WINEDLLOVERRIDES=dsound=native\ndll = dsound=n\n"), conf)
+    }
+
     func testBottleCanTurnOffBuiltInFixesAndArgsStayOneLine() throws {
         var config = try JSONDecoder().decode(BottleConfig.self, from: Data(#"{"builtInFixes": false}"#.utf8))
         XCTAssertFalse(config.builtInFixes)

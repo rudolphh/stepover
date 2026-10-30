@@ -153,7 +153,8 @@ final class FixTests: XCTestCase {
         let conf = config.compatConf(fixes: [matched])
         let pathSection = conf.components(separatedBy: "[\(path)]\n").last ?? ""
         XCTAssertTrue(pathSection.hasPrefix("backend = wined3d\nenv = A=mine\nenv = B=fix\nenv = WINEDLLOVERRIDES=ddraw=b\n"), pathSection)
-        XCTAssertFalse(pathSection.contains("dll = ddraw"))
+        XCTAssertTrue(pathSection.contains("dll = ddraw=b\n"), pathSection)   // the user's own override, not the fix's
+        XCTAssertFalse(pathSection.contains("dll = ddraw=n"))
         // full-path sections come after every file-name section
         XCTAssertLessThan(conf.range(of: "[zgame.exe]")!.lowerBound, conf.range(of: "[\(path)]")!.lowerBound)
         XCTAssertEqual("ÄBC.EXE".asciiLowercased, "Äbc.exe")
