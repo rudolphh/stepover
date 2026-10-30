@@ -35,11 +35,7 @@ public enum Launcher {
         try FileManager.default.createDirectory(at: Paths.logs, withIntermediateDirectories: true)
         try? BottleSetup.makePublicDownloads(bottle)   // bottles made before Stepover created it
 
-        let metalFX = config.env["D3DM_ENABLE_METALFX"] == "1"
-            || config.programs.contains { $0.env["D3DM_ENABLE_METALFX"] == "1" && config.backend(for: $0) == .d3dmetal }
-            || config.processes.values.contains { $0.env["D3DM_ENABLE_METALFX"] == "1" }
-            || fixes.contains { $0.fix.env["D3DM_ENABLE_METALFX"] == "1" && config.env["D3DM_ENABLE_METALFX"] == nil }
-        guard metalFX else { return }
+        guard metalFX(config, fixes: fixes) else { return }
         let system32 = bottle.cDrive.appendingPathComponent("windows/system32")
         for dll in ["nvngx.dll", "nvapi64.dll"] {
             let source = runtime.d3dmetalWindowsDir.appendingPathComponent(dll)
@@ -53,6 +49,29 @@ public enum Launcher {
             }
             try? fm.removeItem(at: target)
             try wanted.write(to: target)
+        }
+    }
+
+    /// MetalFX (D3DMetal's DLSS stand-in) is on for the bottle or for one of its programs.
+    static func metalFX(_ config: BottleConfig, fixes: [MatchedFix]) -> Bool {
+        config.env["D3DM_ENABLE_METALFX"] == "1"
+            || config.programs.contains { $0.env["D3DM_ENABLE_METALFX"] == "1" && config.backend(for: $0) == .d3dmetal }
+            || config.processes.values.contains { $0.env["D3DM_ENABLE_METALFX"] == "1" }
+            || fixes.contains { $0.fix.env["D3DM_ENABLE_METALFX"] == "1" && config.env["D3DM_ENABLE_METALFX"] == nil }
+    }
+
+    /// With MetalFX on, sets NGXCore's FullPath (BottleSetup.ngxPathPatch) once, while nothing runs in the bottle
+    /// (regedit starts Wine; a running bottle gets it at its next start). Failures are logged, not fatal.
+    static func ensureNGXPath(_ bottle: Bottle) {
+        let config = bottle.loadConfig()
+        guard metalFX(config, fixes: matchedFixes(bottle, config: config)), let patch = BottleSetup.ngxPathPatch(bottle) else { return }
+        for _ in 0..<12 where bottle.isRunning { Thread.sleep(forTimeInterval: 0.5) }
+        guard !bottle.isRunning else { return }
+        do {
+            try importRegistry(patch, into: bottle)
+            appendLog(bottle, "MetalFX: set NGXCore FullPath so games find nvngx.dll")
+        } catch {
+            appendLog(bottle, "MetalFX: couldn't set NGXCore FullPath: \(error)")
         }
     }
 
@@ -106,6 +125,7 @@ public enum Launcher {
         }
         let workdir = program.workdir.flatMap { WindowsPath.toMac($0, bottle: bottle) } ?? exe.deletingLastPathComponent()
         applyFixes(bottle)
+        ensureNGXPath(bottle)
         appendLog(bottle, "launching \(program.name): \(program.exe) \(program.args.joined(separator: " "))")
         let status = try wine([program.exe] + program.args + extraArgs, bottle: bottle, program: program,
                               workdir: workdir, wait: wait, output: output)

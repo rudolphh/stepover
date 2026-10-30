@@ -94,7 +94,9 @@ DirectX 9 and older gets WineD3D.
 `WINEDEBUG=-all`, then the bottle's and the program's variables. MSync is on only with
 `WINEMSYNC=1`, as in CrossOver (CrossOver 26.3 has no ESync). With MetalFX on, D3DMetal's
 `nvngx.dll`/`nvapi64.dll` are copied into the bottle's `system32` (Apple's Read Me; originals kept as
-`*.stepover-orig`).
+`*.stepover-orig`), and `HKLM\Software\NVIDIA Corporation\Global\NGXCore` `FullPath` is set to that folder once,
+when nothing runs in the bottle: games look for `nvngx.dll` there, and Wine's setup doesn't create the value
+(CrossOver's bottles have it).
 
 Wine redoes a bottle's whole setup when `wine.inf`'s mtime differs from the bottle's
 `.update-timestamp`. That is slow, and in a bottle with native .NET it can stop on a .NET error

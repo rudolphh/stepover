@@ -25,4 +25,14 @@ public enum BottleSetup {
             if !fm.fileExists(atPath: keep.path) { try Data().write(to: keep) }
         }
     }
+
+    /// DLSS on MetalFX: games find nvngx.dll through NGXCore's FullPath. CrossOver's bottles carry it, Wine's
+    /// setup doesn't. Nil when the bottle has it already.
+    public static func ngxPathPatch(_ bottle: Bottle) -> RegistryPatch? {
+        let key = #"Software\NVIDIA Corporation\Global\NGXCore"#, path = #"C:\windows\system32"#
+        guard bottle.systemRegistry.string(key, "FullPath")?.lowercased() != path.lowercased() else { return nil }
+        var patch = RegistryPatch()
+        patch.set(#"HKEY_LOCAL_MACHINE\"# + key, "FullPath", .string(path))
+        return patch
+    }
 }

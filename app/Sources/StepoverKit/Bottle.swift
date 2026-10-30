@@ -94,6 +94,7 @@ public struct Bottle: Hashable, Identifiable, Sendable {
     // MARK: registry-backed display settings
 
     public var userRegistry: RegistryFile { RegistryFile(url: url.appendingPathComponent("user.reg")) }
+    public var systemRegistry: RegistryFile { RegistryFile(url: url.appendingPathComponent("system.reg")) }
 
     /// Wine's Mac driver "High Resolution Mode" (RetinaMode=y): full Retina pixels instead of points.
     public var highResolution: Bool {

@@ -92,6 +92,24 @@ final class AroundInstallTests: XCTestCase {
         XCTAssertTrue(fm.fileExists(atPath: bottle.cDrive.appendingPathComponent("users/Public/Downloads").path))
     }
 
+    func testNGXPathForMetalFX() throws {
+        // DLSS on MetalFX finds nvngx.dll through NGXCore's FullPath; CrossOver bottles carry it, new bottles don't.
+        let bottle = Bottle(url: dir.appendingPathComponent("bottle"))
+        write("bottle/system.reg", "WINE REGISTRY Version 2\n\n[Software\\\\Nvidia Corporation\\\\Global\\\\NGXCore] 1793335434\n#time=1dd6\n\n")
+        let patch = try XCTUnwrap(BottleSetup.ngxPathPatch(bottle))
+        XCTAssertTrue(patch.text.contains("[HKEY_LOCAL_MACHINE\\Software\\NVIDIA Corporation\\Global\\NGXCore]\r\n\"FullPath\"=\"C:\\\\windows\\\\system32\"\r\n"), patch.text)
+        write("bottle/system.reg", "WINE REGISTRY Version 2\n\n[Software\\\\Nvidia Corporation\\\\Global\\\\NGXCore] 1792659227\n\"FullPath\"=\"C:\\\\windows\\\\system32\"\n\n")
+        XCTAssertNil(BottleSetup.ngxPathPatch(bottle))
+    }
+
+    func testMetalFXIsOnForTheBottleOrOneOfItsPrograms() {
+        var config = BottleConfig()
+        XCTAssertFalse(Launcher.metalFX(config, fixes: []))
+        config.processes = ["GTA5_Enhanced.exe": ProcessRule(env: ["D3DM_ENABLE_METALFX": "1"])]
+        XCTAssertTrue(Launcher.metalFX(config, fixes: []))
+        XCTAssertTrue(Launcher.metalFX(BottleConfig(env: ["D3DM_ENABLE_METALFX": "1"]), fixes: []))
+    }
+
     func testPersonalFoldersInside() throws {
         let home = dir.appendingPathComponent("home/Documents")
         try fm.createDirectory(at: home, withIntermediateDirectories: true)
