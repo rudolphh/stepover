@@ -31,6 +31,12 @@ in the PEB, before the program reads it. `args` work for 64-bit programs only: f
 builds the WoW64 copy of the command line before the plug-in loads. Because it runs per process, a game started by its launcher gets its
 own backend. `STEPOVER_COMPAT_DEBUG=1` logs each decision.
 
+A prepended folder only helps for DLLs the bottle already has a placeholder for in `system32`: outside
+the first setup, Wine loads a builtin DLL that isn't one of its own only through such a file. Wine's
+setup makes them for its own DLLs (so DXMT's `d3d11`/`dxgi` are found), not for DXMT's `winemetal.dll`,
+so before each launch Stepover puts the runtime's `winemetal.dll` in `system32` and `syswow64` where
+none is (CrossOver's bottles have them). `check-runtime.sh --metal` runs the Direct3D 11 test on DXMT too.
+
 ## Built-in fixes
 
 `BuiltInFixes.swift` lists per-program rules that every bottle gets, beneath the bottle's own

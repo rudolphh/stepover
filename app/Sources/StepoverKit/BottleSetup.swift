@@ -35,4 +35,19 @@ public enum BottleSetup {
         patch.set(#"HKEY_LOCAL_MACHINE\"# + key, "FullPath", .string(path))
         return patch
     }
+
+    /// DXMT's d3d11/dxgi import winemetal.dll, which isn't one of Wine's own DLLs. Wine loads such a DLL only through
+    /// a placeholder on the search path (dlls/ntdll/loader.c, find_builtin_without_file), and Wine's setup makes
+    /// none, so DXMT failed in every bottle Stepover made. Puts the runtime's own copies in system32 and syswow64
+    /// where none is (CrossOver's bottles have them); Wine then loads the DLL from the runtime as usual.
+    public static func placeDXMTPlaceholders(_ bottle: Bottle, runtime: Runtime) {
+        let fm = FileManager.default
+        for (arch, folder) in [("x86_64-windows", "system32"), ("i386-windows", "syswow64")] {
+            let source = runtime.lib.appendingPathComponent("dxmt/\(arch)/winemetal.dll")
+            let dir = bottle.cDrive.appendingPathComponent("windows/\(folder)")
+            let target = dir.appendingPathComponent("winemetal.dll")
+            guard fm.fileExists(atPath: source.path), fm.fileExists(atPath: dir.path), !fm.fileExists(atPath: target.path) else { continue }
+            try? fm.copyItem(at: source, to: target)
+        }
+    }
 }

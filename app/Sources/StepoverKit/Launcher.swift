@@ -27,13 +27,15 @@ public enum Launcher {
         return env
     }
 
-    /// Puts bottle-side files in place before a launch: the compat file, C:\users\Public\Downloads, and D3DMetal's nvngx/nvapi64
+    /// Puts bottle-side files in place before a launch: the compat file, C:\users\Public\Downloads, DXMT's winemetal.dll
+    /// placeholders, and D3DMetal's nvngx/nvapi64
     /// in system32 when MetalFX is on (Apple's Read Me; CrossOver redirects these instead).
     public static func prepare(bottle: Bottle, config: BottleConfig, runtime: Runtime) throws {
         let fixes = matchedFixes(bottle, config: config)
         try config.compatConf(fixes: fixes).write(to: bottle.compatURL, atomically: true, encoding: .utf8)
         try FileManager.default.createDirectory(at: Paths.logs, withIntermediateDirectories: true)
         try? BottleSetup.makePublicDownloads(bottle)   // bottles made before Stepover created it
+        BottleSetup.placeDXMTPlaceholders(bottle, runtime: runtime)
 
         guard metalFX(config, fixes: fixes) else { return }
         let system32 = bottle.cDrive.appendingPathComponent("windows/system32")

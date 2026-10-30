@@ -110,6 +110,24 @@ final class AroundInstallTests: XCTestCase {
         XCTAssertTrue(Launcher.metalFX(BottleConfig(env: ["D3DM_ENABLE_METALFX": "1"]), fixes: []))
     }
 
+    func testDXMTPlaceholdersSoWineFindsWinemetal() throws {
+        // Wine loads a DLL that isn't one of its own only through a placeholder on the search path; DXMT's d3d11/dxgi
+        // import winemetal.dll, and Wine's setup makes no placeholder for it.
+        let runtime = Runtime(url: dir.appendingPathComponent("runtime"))
+        write("runtime/lib/dxmt/x86_64-windows/winemetal.dll", "x64")
+        write("runtime/lib/dxmt/i386-windows/winemetal.dll", "x86")
+        let bottle = Bottle(url: dir.appendingPathComponent("bottle"))
+        try fm.createDirectory(at: bottle.cDrive.appendingPathComponent("windows/system32"), withIntermediateDirectories: true)
+        try fm.createDirectory(at: bottle.cDrive.appendingPathComponent("windows/syswow64"), withIntermediateDirectories: true)
+        BottleSetup.placeDXMTPlaceholders(bottle, runtime: runtime)
+        XCTAssertEqual(try String(contentsOf: bottle.cDrive.appendingPathComponent("windows/system32/winemetal.dll"), encoding: .utf8), "x64")
+        XCTAssertEqual(try String(contentsOf: bottle.cDrive.appendingPathComponent("windows/syswow64/winemetal.dll"), encoding: .utf8), "x86")
+        // a bottle that has one already (CrossOver's) keeps it
+        write("bottle/drive_c/windows/system32/winemetal.dll", "crossover")
+        BottleSetup.placeDXMTPlaceholders(bottle, runtime: runtime)
+        XCTAssertEqual(try String(contentsOf: bottle.cDrive.appendingPathComponent("windows/system32/winemetal.dll"), encoding: .utf8), "crossover")
+    }
+
     func testPersonalFoldersInside() throws {
         let home = dir.appendingPathComponent("home/Documents")
         try fm.createDirectory(at: home, withIntermediateDirectories: true)

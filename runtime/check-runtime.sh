@@ -122,4 +122,18 @@ if [ "$METAL" = 1 ]; then
         fi
     done
     echo "ok metal"
+
+    # DXMT's d3d11/dxgi import winemetal.dll, which isn't one of Wine's own DLLs: Wine loads it only through a
+    # placeholder in the bottle's system32, and Wine's setup makes none (Stepover places it before a launch).
+    "$CLI" graphics check '*' dxmt >/dev/null
+    STEPOVER_RUNTIME="$NAME" STEPOVER_COMPAT_DEBUG=1 limit "$TIMEOUT" "$CLI" run check 'C:\d3d11.exe' --wait \
+        >"$TMP/run-dxmt.log" 2>&1 || true
+    grep -q "^stepover-compat: d3d11.exe: backend dxmt" "$TMP/run-dxmt.log" ||
+        fail dxmt "d3d11.exe didn't run on DXMT: $(grep "^stepover-compat: d3d11.exe" "$TMP/run-dxmt.log" | tail -1)"
+    if ! grep -q "^d3d11: ok" "$TMP/run-dxmt.log"; then
+        reason="$(grep "^d3d11:" "$TMP/run-dxmt.log" | tail -1 | tr -d '\r' || true)"
+        [ -n "$reason" ] || reason="d3d11.exe printed nothing (Wine couldn't start it, or it crashed); last output: $(tail -n 3 "$TMP/run-dxmt.log" | tr -d '\r' | tr '\n' ' ' | sed 's/ $//')"
+        fail dxmt "$reason"
+    fi
+    echo "ok dxmt"
 fi

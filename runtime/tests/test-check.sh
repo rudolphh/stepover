@@ -19,7 +19,7 @@ cp -Rc "$INSTALLED" "$tmp/cx26.3"
 out="$(runtime/check-runtime.sh "$tmp/cx26.3" --previous "$tmp/cx26.3" --metal 2>&1)" && status=0 || status=$?
 assert_eq "0" "$status" "complete runtime passes"
 # Without a stereo output device the spatial check is skipped, which is a pass.
-assert_eq $'ok files\nok boot\nok program\nok plugin\nok notify\nok spatial\nok previous\nok metal' \
+assert_eq $'ok files\nok boot\nok program\nok plugin\nok notify\nok spatial\nok previous\nok metal\nok dxmt' \
     "$(printf '%s\n' "$out" | grep -E '^(ok|skip|FAIL) ' | sed -E 's/^skip spatial .*/ok spatial/')" "every check reported"
 
 rm "$tmp/cx26.3/lib/d3dmetal/external/D3DMetal.framework/Versions/A/D3DMetal"
