@@ -10,7 +10,6 @@ VERSION="$(cat "$ROOT/VERSION")"
 REPO="${STEPOVER_GITHUB_REPO:-rudolphh/stepover}"
 TAP_REPO="${STEPOVER_TAP_REPO:-${REPO%%/*}/homebrew-stepover}"
 DIST="$ROOT/release/dist/$VERSION"
-ATTRIBUTION="Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 [ -f "$DIST/tap/Casks/stepover.rb" ] || { echo "run release/make-release.sh first" >&2; exit 1; }
 grep -q "github.com/$REPO/" "$DIST/runtime.json" || { echo "release was built for another repository" >&2; exit 1; }
@@ -20,7 +19,7 @@ echo "== source repository $REPO"
 cd "$ROOT"
 [ -d .git ] || git init -b main
 git add -A
-git diff --cached --quiet || git commit -q -m "Stepover $VERSION" -m "$ATTRIBUTION"
+git diff --cached --quiet || git commit -q -m "Stepover $VERSION"
 if ! gh repo view "$REPO" >/dev/null 2>&1; then
     gh repo create "$REPO" --public --description "Run Windows games on Apple Silicon with Wine built from CrossOver's source, D3DMetal, DXMT and DXVK" \
         --source "$ROOT" --remote origin --push
@@ -62,7 +61,7 @@ cat > "$TMP/tap/README.md" <<EOF
 Stepover: https://github.com/$REPO
 EOF
 git -C "$TMP/tap" add -A
-git -C "$TMP/tap" diff --cached --quiet || git -C "$TMP/tap" commit -q -m "stepover $VERSION" -m "$ATTRIBUTION"
+git -C "$TMP/tap" diff --cached --quiet || git -C "$TMP/tap" commit -q -m "stepover $VERSION"
 if gh repo view "$TAP_REPO" >/dev/null 2>&1; then
     git -C "$TMP/tap" push -q origin main
 else
