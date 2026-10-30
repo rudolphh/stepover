@@ -106,6 +106,8 @@ out=$("$cli" create "Fresh Bottle" 2>&1); st=$?
 check "create: exit 0" test $st -eq 0
 check "create returns once the new bottle's Wine has ended" not_running "Fresh Bottle"
 check "create: the wait didn't run out" not_in_log "Fresh Bottle" "still running after a minute"
+check "create: C:\\users\\Public\\Downloads exists (Rockstar's launcher service needs it)" \
+  is_folder "$bottles/Fresh Bottle/drive_c/users/Public/Downloads"
 
 print "$passed/$total passed"
 [[ $passed -eq $total ]]

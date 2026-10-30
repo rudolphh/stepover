@@ -118,6 +118,7 @@ public enum Importer {
         // Something that never ends doesn't hold the bottle up past a minute.
         for _ in 0..<240 where bottle.isRunning { Thread.sleep(forTimeInterval: 0.25) }
         if bottle.isRunning { Launcher.appendLog(bottle, "the new bottle's first Wine session was still running after a minute") }
+        try BottleSetup.makePublicDownloads(bottle)
         return bottle
     }
 }

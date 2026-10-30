@@ -46,13 +46,37 @@ final class StepoverKitTests: XCTestCase {
         config.processes = ["SteamWebHelper.exe": ProcessRule(graphics: .wined3d, args: ["--in-process-gpu"])]
         let conf = config.compatConf()
         XCTAssertTrue(conf.contains("[steamwebhelper.exe]\nbackend = wined3d\nargs = --in-process-gpu\n"))
-        XCTAssertEqual(conf.components(separatedBy: "args = --in-process-gpu").count, 2)
+        let steam = conf.components(separatedBy: "[steamwebhelper.exe]\n")[1].components(separatedBy: "\n[")[0]
+        XCTAssertEqual(steam.components(separatedBy: "args = --in-process-gpu").count, 2)
+    }
+
+    func testRockstarLauncherDrawsWithWineD3DOnOpenGL() {
+        // Rockstar's launcher needs Direct3D 10.1: D3DMetal lacks it and MoltenVK has no geometry shaders, so
+        // wined3d's Vulkan renderer fails too. Matched by full path: other games ship a Launcher.exe of their own.
+        let conf = BottleConfig(graphics: .d3dmetal).compatConf()
+        XCTAssertTrue(conf.contains(#"[c:\program files\rockstar games\launcher\launcher.exe]"#
+            + "\nbackend = wined3d\nenv = WINE_D3D_CONFIG=renderer=gl\n"), conf)
+        XCTAssertFalse(conf.contains("[launcher.exe]"))
+    }
+
+    func testRockstarSocialClubDrawsInItsOwnProcess() {
+        let conf = BottleConfig(graphics: .d3dmetal).compatConf()
+        XCTAssertTrue(conf.contains("[socialclubhelper.exe]\nbackend = d3dmetal\nargs = --in-process-gpu\n"), conf)
+    }
+
+    func testBottleRuleForTheRockstarLauncherWins() {
+        var config = BottleConfig(graphics: .d3dmetal)
+        config.processes = ["Launcher.exe": ProcessRule(graphics: .dxvk)]
+        let conf = config.compatConf()
+        XCTAssertTrue(conf.contains(#"[c:\program files\rockstar games\launcher\launcher.exe]"#
+            + "\nbackend = dxvk\nenv = WINE_D3D_CONFIG=renderer=gl\n"), conf)
     }
 
     func testBottleCanTurnOffBuiltInFixesAndArgsStayOneLine() throws {
         var config = try JSONDecoder().decode(BottleConfig.self, from: Data(#"{"builtInFixes": false}"#.utf8))
         XCTAssertFalse(config.builtInFixes)
         XCTAssertFalse(config.compatConf().contains("steamwebhelper.exe"))
+        XCTAssertFalse(config.compatConf().contains("rockstar games"))
         config.processes = ["game.exe": ProcessRule(args: ["-windowed", "-a\n[*]\nbackend = dxvk"])]
         let conf = config.compatConf()
         XCTAssertTrue(conf.contains("[game.exe]\nbackend = d3dmetal\nargs = -windowed\n"))

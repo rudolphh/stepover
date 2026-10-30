@@ -70,6 +70,18 @@ final class AroundInstallTests: XCTestCase {
         XCTAssertTrue(GameFolder.isChanging(dir.appendingPathComponent("copying/setup.exe"), now: now))
     }
 
+    func testPublicDownloadsFolder() throws {
+        // Windows makes C:\users\Public\Downloads at setup; Wine doesn't, and Rockstar's launcher service
+        // fails without it (FOLDERID_PublicDownloads).
+        let bottle = Bottle(url: dir.appendingPathComponent("bottle"))
+        try fm.createDirectory(at: bottle.cDrive.appendingPathComponent("users/Public/Documents"), withIntermediateDirectories: true)
+        try BottleSetup.makePublicDownloads(bottle)
+        var isDir: ObjCBool = false
+        XCTAssertTrue(fm.fileExists(atPath: bottle.cDrive.appendingPathComponent("users/Public/Downloads").path, isDirectory: &isDir))
+        XCTAssertTrue(isDir.boolValue)
+        try BottleSetup.makePublicDownloads(bottle)   // again: already there is fine
+    }
+
     func testPersonalFoldersInside() throws {
         let home = dir.appendingPathComponent("home/Documents")
         try fm.createDirectory(at: home, withIntermediateDirectories: true)
