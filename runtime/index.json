@@ -7,7 +7,19 @@
       "size": 289986340,
       "summary": "Wine version 11.0, D3DMetal 4.0b3, DXMT 0.80, DXVK 1.10.3",
       "released": "2026-10-27",
+      "status": "available",
+      "minApp": "0.2.0",
+      "compatFormat": 3
+    },
+    {
+      "name": "cx26.3-2",
+      "url": "https://github.com/rudolphh/stepover/releases/download/runtime-cx26.3-2/stepover-runtime-cx26.3-2.tar.xz",
+      "sha256": "f3c6966d736f6cd81866d99a42fa782b78da2f3b1146bbfefd37f56504dcf71c",
+      "size": 288635584,
+      "summary": "Wine version 11.0, D3DMetal 4.0b3, DXMT 0.80, DXVK 1.10.3",
+      "released": "2026-10-30",
       "status": "current",
+      "note": "Epic Games installs finish, and Spatial Audio keeps dialogue on stereo speakers.",
       "minApp": "0.2.0",
       "compatFormat": 3
     }
