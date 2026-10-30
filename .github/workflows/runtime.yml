@@ -13,6 +13,10 @@ on:
         description: Build the pinned CrossOver version even when nothing new is out
         type: boolean
         default: false
+      build:
+        description: Runtime build number, for a rebuild of a published CrossOver version (2 makes cx26.3-2)
+        type: string
+        default: ""
   push:
     branches: ["runtime-ci/**"]
     paths: ["runtime/**", "compat/**", "app/**", ".github/workflows/runtime.yml"]
@@ -78,8 +82,10 @@ jobs:
         env:
           CX_VERSION: ${{ needs.detect.outputs.version }}
           CX_SHA256: ${{ needs.detect.outputs.sha256 }}
+          BUILD_NUMBER: ${{ inputs.build }}
         run: |
           [[ "$CX_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$CX_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "bad version or checksum"; exit 1; }
+          [[ -z "$BUILD_NUMBER" || "$BUILD_NUMBER" =~ ^[0-9]+$ ]] || { echo "bad build number: $BUILD_NUMBER"; exit 1; }
           {
             echo "STEPOVER_SRC=$GITHUB_WORKSPACE"
             echo "STEPOVER_BUILD=$RUNNER_TEMP/build"
@@ -88,6 +94,7 @@ jobs:
             echo "STEPOVER_RUNTIMES=$RUNNER_TEMP/runtimes"
             echo "STEPOVER_CX_VERSION=$CX_VERSION"
             echo "STEPOVER_CX_SHA256=$CX_SHA256"
+            echo "STEPOVER_RUNTIME_BUILD=${BUILD_NUMBER:-1}"
             echo "OUT=$RUNNER_TEMP/out"
             echo "STARTED=$(date +%s)"
           } >> "$GITHUB_ENV"
@@ -132,22 +139,22 @@ jobs:
             esac
           done < <(runtime/addon-versions.sh "$STEPOVER_SOURCES/sources/wine")
 
-      - name: Newest published runtime (D3DMetal, and the previous runtime for the checks)
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # App releases don't carry a runtime (since 0.3.0); the runtime list says which one users get.
+      - name: Current published runtime (D3DMetal, and the previous runtime for the checks)
         run: |
+          read -r name url sha < <(jq -r '[.runtimes[] | select((.status // "current") == "current")] | last
+            | "\(.name) \(.url) \(.sha256)"' "$GITHUB_WORKSPACE/runtime/index.json")
+          [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ && "$sha" =~ ^[0-9a-f]{64}$ ]] || { echo "runtime/index.json has no usable current runtime"; exit 1; }
+          file="${url##*/}"
           mkdir -p "$RUNNER_TEMP/previous"
           cd "$RUNNER_TEMP/previous"
-          gh release download --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS
-          line="$(grep -E '  stepover-runtime-[^ ]+\.tar\.xz$' SHA256SUMS | head -1)"
-          file="${line##* }"
-          gh release download --repo "$GITHUB_REPOSITORY" --pattern "$file"
-          echo "$line" | shasum -a 256 -c -
+          curl -fsSL --retry 3 -o "$file" "$url"
+          echo "$sha  $file" | shasum -a 256 -c -
           tar -xJf "$file"
+          [ -d "$name" ] || { echo "$file doesn't hold $name"; exit 1; }
           {
             echo "STEPOVER_D3DMETAL_ARCHIVE=$RUNNER_TEMP/previous/$file"
-            name="${file#stepover-runtime-}"
-            echo "PREVIOUS_RUNTIME=$RUNNER_TEMP/previous/${name%.tar.xz}"
+            echo "PREVIOUS_RUNTIME=$RUNNER_TEMP/previous/$name"
           } >> "$GITHUB_ENV"
 
       - name: Host libraries
