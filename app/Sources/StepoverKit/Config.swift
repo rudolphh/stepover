@@ -178,16 +178,15 @@ public struct BottleConfig: Codable, Sendable {
         }
         // The user's own rules, by file name
         var user: [String: Section] = [:]
-        // A program's own WINEDLLOVERRIDES also goes out as dll lines: Wine reads the variable before the plug-in
-        // can set it, while the plug-in hands dll lines to the loader directly.
         for program in programs {
-            user[program.exeName.asciiLowercased, default: Section()].layer(
-                backend: program.graphics, env: program.env, dlls: Self.dllOverrides(program.env["WINEDLLOVERRIDES"]))
+            user[program.exeName.asciiLowercased, default: Section()].layer(backend: program.graphics, env: program.env)
         }
         for (exe, rule) in processes {
-            user[exe.asciiLowercased, default: Section()].layer(
-                backend: rule.graphics, env: rule.env, dlls: Self.dllOverrides(rule.env["WINEDLLOVERRIDES"]), args: rule.args)
+            user[exe.asciiLowercased, default: Section()].layer(backend: rule.graphics, env: rule.env, args: rule.args)
         }
+        // The program's own WINEDLLOVERRIDES also goes out as dll lines: Wine reads the variable before the plug-in
+        // can set it, while the plug-in hands dll lines to the loader directly.
+        for key in user.keys { user[key]!.dlls = Self.dllOverrides(user[key]!.env["WINEDLLOVERRIDES"]) }
         for (key, rule) in user {
             let mine = Self.overriddenDlls(rule.env["WINEDLLOVERRIDES"])
             sections[key, default: Section()].dlls = (sections[key]?.dlls ?? [:]).filter { !mine.contains($0.key.asciiLowercased) }
@@ -226,27 +225,28 @@ public struct BottleConfig: Codable, Sendable {
         !key.isEmpty && key != "*" && isOneLine(key) && !key.contains("[") && !key.contains("]")
     }
 
-    /// A WINEDLLOVERRIDES value as fix-style load orders: "d3d9,ddraw=n,b;dinput8=" gives d3d9 and ddraw
-    /// "native,builtin", dinput8 "disabled". Entries with a load order Wine wouldn't take are left out.
+    /// A WINEDLLOVERRIDES value as fix-style load orders, parsed the way Wine does (dlls/ntdll/unix/loadorder.c):
+    /// entries split on ";", names and modes on commas, spaces or tabs, a mode counts by its first letter (n, b),
+    /// and no mode means disabled. "d3d9,ddraw=n,b;dinput8=" gives d3d9 and ddraw "native,builtin", dinput8
+    /// "disabled". Names outside ASCII are left out: the compat plug-in matches ASCII only.
     static func dllOverrides(_ value: String?) -> [String: String] {
         guard let value else { return [:] }
         var out: [String: String] = [:]
         for entry in value.split(separator: ";") {
             let parts = entry.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
             guard parts.count == 2 else { continue }
-            let raw = parts[1].trimmingCharacters(in: .whitespaces).asciiLowercased
-            let order: String
-            if raw.isEmpty || raw == "d" || raw == "disabled" {
-                order = "disabled"
-            } else {
-                let modes = raw.split(separator: ",").map { $0 == "n" || $0 == "native" ? "native" : $0 == "b" || $0 == "builtin" ? "builtin" : "" }
-                guard !modes.contains("") else { continue }
-                order = modes.joined(separator: ",")
+            var modes: [String] = []
+            for token in words(parts[1]) {
+                let mode = token.first.map { $0 == "n" || $0 == "N" ? "native" : $0 == "b" || $0 == "B" ? "builtin" : "" } ?? ""
+                if mode.isEmpty || modes.contains(mode) { continue }
+                modes.append(mode)
+                if modes.count == 2 { break }
             }
-            for name in parts[0].split(separator: ",") {
-                var dll = name.trimmingCharacters(in: .whitespaces).asciiLowercased
+            let order = modes.isEmpty ? "disabled" : modes.joined(separator: ",")
+            for name in words(parts[0]) {
+                var dll = name.asciiLowercased
                 if dll.hasSuffix(".dll") { dll.removeLast(4) }
-                if !dll.isEmpty && isOneLine(dll) { out[dll] = order }
+                if !dll.isEmpty && dll.allSatisfy(\.isASCII) && isOneLine(dll) { out[dll] = order }
             }
         }
         return out
@@ -257,13 +257,18 @@ public struct BottleConfig: Codable, Sendable {
         guard let value else { return [] }
         var out = Set<String>()
         for entry in value.split(separator: ";") {
-            for name in (entry.split(separator: "=", maxSplits: 1).first ?? "").split(separator: ",") {
-                var dll = name.trimmingCharacters(in: .whitespaces).asciiLowercased
+            for name in words(entry.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false).first ?? "") {
+                var dll = name.asciiLowercased
                 if dll.hasSuffix(".dll") { dll.removeLast(4) }
                 out.insert(dll)
             }
         }
         return out
+    }
+
+    /// Wine's separators in WINEDLLOVERRIDES lists: commas, spaces and tabs.
+    private static func words(_ s: Substring) -> [String] {
+        s.split(whereSeparator: { $0 == "," || $0 == " " || $0 == "\t" }).map(String.init)
     }
 
     /// Which of `fixes` apply here: those whose game is found, by Steam install or by program file.

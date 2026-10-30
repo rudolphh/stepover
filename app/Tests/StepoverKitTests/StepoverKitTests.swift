@@ -98,6 +98,25 @@ final class StepoverKitTests: XCTestCase {
         XCTAssertTrue(conf.contains("[game.exe]\nbackend = d3dmetal\nenv = WINEDLLOVERRIDES=dsound=native\ndll = dsound=n\n"), conf)
     }
 
+    func testOwnDllOverridesParseLikeWine() {
+        // Wine's loadorder.c: names and modes are separated by commas, spaces or tabs; a mode counts by its first
+        // letter (n, b), anything else is ignored, and no mode at all means disabled.
+        XCTAssertEqual(BottleConfig.dllOverrides("xinput1_4=n, b;d3d9 ddraw\t=b;Foo.DLL=native;x=xyz;y=B,N;z=n,n"),
+                       ["xinput1_4": "native,builtin", "d3d9": "builtin", "ddraw": "builtin", "foo": "native",
+                        "x": "disabled", "y": "builtin,native", "z": "native"])
+        XCTAssertEqual(BottleConfig.dllOverrides("élan=n;ok=n"), ["ok": "native"])   // the plug-in matches ASCII names only
+        XCTAssertEqual(BottleConfig.overriddenDlls("d3d9 ddraw=n"), ["d3d9", "ddraw"])
+    }
+
+    func testOwnDllLinesFollowTheWineDllOverridesTheSectionGets() {
+        var config = BottleConfig(graphics: .d3dmetal)
+        config.programs = [Program(name: "Game", exe: #"C:\Games\game.exe"#, env: ["WINEDLLOVERRIDES": "ddraw=n"])]
+        config.processes = ["game.exe": ProcessRule(env: ["WINEDLLOVERRIDES": "dsound=n"])]
+        let section = config.compatConf().components(separatedBy: "[game.exe]\n").last ?? ""
+        XCTAssertTrue(section.contains("env = WINEDLLOVERRIDES=dsound=n\ndll = dsound=n\n"), section)
+        XCTAssertFalse(section.contains("dll = ddraw"), section)
+    }
+
     func testBottleCanTurnOffBuiltInFixesAndArgsStayOneLine() throws {
         var config = try JSONDecoder().decode(BottleConfig.self, from: Data(#"{"builtInFixes": false}"#.utf8))
         XCTAssertFalse(config.builtInFixes)
