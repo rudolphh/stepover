@@ -30,6 +30,8 @@ for cand in "$INSTALL/bin/wineserver" "$INSTALL/lib/wine/x86_64-unix/wineserver"
     [ -e "$cand" ] && { cp -L "$cand" "$STAGE/bin/wineserver"; break; }
 done
 [ -x "$STAGE/bin/wineserver" ] || { echo "missing wineserver" >&2; exit 1; }
+# wineserver links libinotify (folder-change notifications), which sits in the runtime's lib/
+install_name_tool -add_rpath @loader_path/../lib "$STAGE/bin/wineserver"
 cp -a "$DEPS"/lib/*.dylib "$STAGE/lib/"
 
 echo "== compat plug-in"
@@ -103,7 +105,8 @@ tar -xJf "$DL/wine-gecko-$GECKO_VERSION-x86_64.tar.xz" -C "$STAGE/share/wine/gec
 
 echo "== licenses"
 L="$STAGE/licenses"
-mkdir -p "$L/wine" "$L/gnutls" "$L/gmp" "$L/freetype" "$L/nettle" "$L/sdl2" "$L/ffmpeg" "$L/moltenvk" "$L/dxmt" "$L/dxvk"
+mkdir -p "$L/wine" "$L/gnutls" "$L/gmp" "$L/freetype" "$L/nettle" "$L/sdl2" "$L/ffmpeg" "$L/libinotify" "$L/moltenvk" \
+    "$L/dxmt" "$L/dxvk"
 cp "$SOURCES/sources/wine/COPYING.LIB" "$SOURCES/sources/wine/LICENSE" "$SOURCES/sources/wine/AUTHORS" "$L/wine/"
 cp "$SOURCES/sources/gnutls/gnutls/LICENSE" "$L/gnutls/" 2>/dev/null || true
 cp "$SOURCES/sources/gnutls/gmp/COPYING.LESSERv3" "$SOURCES/sources/gnutls/gmp/COPYINGv2" "$SOURCES/sources/gnutls/gmp/COPYINGv3" "$L/gmp/"
@@ -111,6 +114,7 @@ cp "$SOURCES/sources/freetype/LICENSE.TXT" "$SOURCES/sources/freetype/docs/FTL.T
 tar -xzOf "$DL/nettle-3.10.2.tar.gz" nettle-3.10.2/COPYING.LESSERv3 > "$L/nettle/COPYING.LESSERv3"
 tar -xzOf "$DL/SDL2-2.32.10.tar.gz" SDL2-2.32.10/LICENSE.txt > "$L/sdl2/LICENSE.txt"
 tar -xJOf "$DL/ffmpeg-7.1.5.tar.xz" ffmpeg-7.1.5/COPYING.LGPLv2.1 > "$L/ffmpeg/COPYING.LGPLv2.1"
+tar -xzOf "$DL/libinotify-20240724.tar.gz" libinotify-20240724/LICENSE > "$L/libinotify/LICENSE"
 tar -xOf "$DL/MoltenVK-1.4.2-macos.tar" MoltenVK/LICENSE > "$L/moltenvk/LICENSE"
 fetch "https://raw.githubusercontent.com/3Shain/dxmt/v$DXMT_VERSION/LICENSE" \
     6b928413c6308c106f3e0080bd94b6427b56d587d400fd40e6cbfbab7d9c4ae1 "dxmt-v$DXMT_VERSION-LICENSE"
@@ -122,13 +126,13 @@ Stepover Wine runtime $RUNTIME_NAME
 Not made, endorsed or supported by CodeWeavers or Apple. "CrossOver" is a registered trademark
 of CodeWeavers, Inc.
 
-Wine (LGPL-2.1-or-later, wine/): built unmodified from CodeWeavers' published CrossOver
-$CX_VERSION source, $CX_URL (sha256 $CX_SHA256).
+Wine (LGPL-2.1-or-later, wine/): built from CodeWeavers' published CrossOver $CX_VERSION source,
+$CX_URL (sha256 $CX_SHA256), with Stepover's patches (patches/wine in the Stepover source).
 The same archive is attached to every Stepover release, with the build scripts that produced this
 runtime (GPL-3.0). gnutls, gmp, freetype and DXVK ($DXVK_VERSION) come from the same archive; DXVK
 carries two header fixes for newer mingw-w64 (patches/dxvk in the Stepover source).
-nettle 3.10.2, SDL 2.32.10 and FFmpeg 7.1.5 (LGPL build) were built from their release archives,
-also attached to each release.
+nettle 3.10.2, SDL 2.32.10, FFmpeg 7.1.5 (LGPL build) and libinotify-kqueue 20240724 (MIT,
+libinotify/) were built from their release archives, also attached to each release.
 
 D3DMetal $D3DM_VERSION (d3dmetal/): Apple's Game Porting Toolkit redistributables, distributed
 unmodified and only for non-commercial purposes under Apple's license (d3dmetal/License.rtf);
@@ -143,7 +147,7 @@ EOF
 echo "== signatures and checks"
 find "$STAGE/lib" -type f \( -name '*.dylib' -o -name '*.so' \) -not -path '*/d3dmetal/*' -exec codesign -f -s - {} \; 2>/dev/null
 codesign -f -s - "$STAGE/bin/wineserver" "$STAGE/lib/wine/x86_64-unix/wine" 2>/dev/null || true
-if otool -L "$STAGE"/lib/*.dylib "$STAGE"/lib/wine/x86_64-unix/*.so | grep -q "$BUILD"; then
+if otool -L "$STAGE"/lib/*.dylib "$STAGE"/lib/wine/x86_64-unix/*.so "$STAGE/bin/wineserver" | grep -q "$BUILD"; then
     echo "absolute build paths left in binaries" >&2; exit 1
 fi
 cat > "$STAGE/VERSION" <<EOF

@@ -134,7 +134,20 @@ build_ffmpeg() {
     make -j"$JOBS" && make install && fix_ids
 }
 
-ALL=(gmp nettle gnutls freetype sdl2 moltenvk ffmpeg)
+build_libinotify() {
+    log libinotify
+    # inotify over kqueue, for wineserver's folder-change notifications (ReadDirectoryChangesW)
+    fetch https://github.com/libinotify-kqueue/libinotify-kqueue/releases/download/20240724/libinotify-20240724.tar.gz \
+        5cc3fb7af407b17b7daa871cc98bb882716c4b5c296fadfb66bfe86c37cc599c libinotify-20240724.tar.gz
+    untar libinotify libinotify-20240724.tar.gz
+    # configure runs small programs to learn how this kernel's kqueue reports moves, and has no answer when
+    # cross compiling; build = host lets them run (x86_64 under Rosetta, the same kernel the runtime uses).
+    ./configure --prefix="$PREFIX" --host=x86_64-apple-darwin --build=x86_64-apple-darwin \
+        --enable-shared --disable-static
+    make -j"$JOBS" && make install && fix_ids
+}
+
+ALL=(gmp nettle gnutls freetype sdl2 moltenvk ffmpeg libinotify)
 for c in "${@:-${ALL[@]}}"; do "build_$c"; done
 rm -rf "$WORK"
 log "done: $PREFIX"

@@ -46,7 +46,7 @@ rm -rf "$OUT/Stepover.app"
 APP_SHA="$(shasum -a 256 "$OUT/$APP_FILE" | cut -d' ' -f1)"
 
 echo "== sources"
-for f in crossover-sources-26.3.0.tar.gz nettle-3.10.2.tar.gz SDL2-2.32.10.tar.gz ffmpeg-7.1.5.tar.xz; do
+for f in crossover-sources-26.3.0.tar.gz nettle-3.10.2.tar.gz SDL2-2.32.10.tar.gz ffmpeg-7.1.5.tar.xz libinotify-20240724.tar.gz; do
     cp -c "$DL/$f" "$OUT/sources/$f"
 done
 COPYFILE_DISABLE=1 tar -czf "$OUT/sources/stepover-$VERSION-source.tar.gz" -C "${ROOT:h}" \

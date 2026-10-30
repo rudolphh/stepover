@@ -1,9 +1,11 @@
 #!/bin/bash
 # Checks a built Stepover runtime before it goes anywhere: every part is there, Wine boots a new bottle,
-# a Windows program runs, the compat plug-in loads, and with --previous a bottle made by the previous
+# a Windows program runs, the compat plug-in loads, folder changes are reported (ReadDirectoryChangesW),
+# Spatial Audio on a stereo device keeps center and sides, and with --previous a bottle made by the previous
 # runtime starts on this one, and with --metal tiny Direct3D 11 and 12 programs draw through D3DMetal.
 # Uses the real `stepover` command in a temporary home, so the user's bottles, logs and launchers are
-# never touched. Prints "ok <check>" or "FAIL <check>: <reason>" and exits 1 at the first failure.
+# never touched. Prints "ok <check>", "skip <check> (<why>)" or "FAIL <check>: <reason>" and exits 1 at the
+# first failure. The Spatial Audio check is skipped without a stereo output device (CI runners have none).
 #
 #   check-runtime.sh <runtime dir> [--previous <runtime dir>] [--metal]
 #   STEPOVER_CLI             the stepover command (default app/.build/release/stepover)
@@ -71,6 +73,28 @@ echo "ok program"
 grep -q 'stepover-compat: hello.exe: backend' "$TMP/run-check.log" ||
     fail plugin "the compat plug-in didn't report a backend for hello.exe"
 echo "ok plugin"
+
+# run_test <name> [mingw libraries...]: builds runtime/tests/<name>.c, runs it in the check bottle and prints
+# the line it reports ("<name>: ...").
+run_test() {
+    local name="$1"; shift
+    x86_64-w64-mingw32-gcc -O2 -o "$STEPOVER_HOME/Bottles/check/drive_c/$name.exe" "$ROOT/runtime/tests/$name.c" "$@"
+    STEPOVER_RUNTIME="$NAME" limit "$TIMEOUT" "$CLI" run check "C:\\$name.exe" --wait >"$TMP/run-$name.log" 2>&1 || true
+    # Windows console lines end in \r\n
+    grep "^$name: " "$TMP/run-$name.log" | tail -1 | tr -d '\r' | grep . ||
+        echo "$name: $name.exe printed nothing (it crashed, or was still running after $TIMEOUT s); last output: $(tail -n 3 "$TMP/run-$name.log" | tr -d '\r' | tr '\n' ' ' | sed 's/ $//')"
+}
+
+result="$(run_test notify)"
+[ "$result" = "notify: ok" ] || fail notify "${result#notify: }"
+echo "ok notify"
+
+result="$(run_test spatial -lole32)"
+case "$result" in
+    "spatial: ok") echo "ok spatial" ;;
+    "spatial: skip "*) echo "skip spatial ${result#spatial: skip }" ;;
+    *) fail spatial "${result#spatial: }" ;;
+esac
 
 if [ -n "$PREVIOUS" ]; then
     PNAME="$(basename "$PREVIOUS")"

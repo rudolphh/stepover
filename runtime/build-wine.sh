@@ -1,16 +1,24 @@
 #!/bin/bash
-# Builds CodeWeavers' CrossOver Wine tree (unpatched) for an x86_64 host, which runs under Rosetta,
-# with new WoW64 (i386 PE code on the 64-bit host), into $INSTALL.
+# Builds CodeWeavers' CrossOver Wine tree, with Stepover's patches (patches/wine), for an x86_64 host,
+# which runs under Rosetta, with new WoW64 (i386 PE code on the 64-bit host), into $INSTALL.
 # The build runs natively on arm64 and cross-compiles with -arch x86_64.
 # Adapted from diacunap/wine-cx-sikarugir and steamplay-mac (GPL-3.0).
 #
 # Usage: build-wine.sh tools          native arm64 build tools only
+#        build-wine.sh patch          only apply Stepover's patches to the sources
 #        build-wine.sh [--reconfigure] the x86_64 runtime (builds tools first if needed)
 set -euo pipefail
-source "$(dirname "$0")/config.sh"
+HERE="$(cd "$(dirname "$0")" && pwd)"   # absolute: patch -d changes folder before reading the patch
+source "$HERE/config.sh"
 
 SRC="$SOURCES/sources/wine"
 [ -f "$SRC/configure" ] || { echo "no wine sources in $SRC" >&2; exit 1; }
+
+for p in "$HERE"/patches/wine/*.patch; do
+    patch -d "$SRC" -p1 -R --dry-run -s -f -i "$p" >/dev/null 2>&1 && continue   # already applied
+    patch -d "$SRC" -p1 -N -s -i "$p" || { echo "${p##*/} did not apply" >&2; exit 1; }
+done
+[ "${1:-}" != patch ] || exit 0
 
 export PATH="$BREW_PREFIX/opt/bison/bin:$BREW_PREFIX/opt/flex/bin:$BREW_PREFIX/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
@@ -51,7 +59,7 @@ if [ ! -f Makefile ] || [ "${1:-}" = "--reconfigure" ]; then
         --without-fontconfig --with-freetype --with-gnutls --without-gphoto --without-gstreamer \
         --without-krb5 --without-netapi --without-oss --without-pulse --without-sane --with-sdl \
         --without-udev --without-usb --without-v4l2 --with-vulkan --without-x --without-wayland \
-        --with-ffmpeg --without-inotify --without-pcap \
+        --with-ffmpeg --with-inotify --without-pcap \
         CC="clang -arch x86_64" CXX="clang++ -arch x86_64" OBJC="clang -arch x86_64" \
         i386_CC="i686-w64-mingw32-gcc" x86_64_CC="x86_64-w64-mingw32-gcc" \
         CFLAGS="-O2 -g0" CROSSCFLAGS="-O2 -g0" \
@@ -62,7 +70,8 @@ if [ ! -f Makefile ] || [ "${1:-}" = "--reconfigure" ]; then
         FREETYPE_CFLAGS="-I$DEPS/include/freetype2" FREETYPE_LIBS="-L$DEPS/lib -lfreetype" \
         SDL2_CFLAGS="-I$DEPS/include/SDL2 -D_THREAD_SAFE" SDL2_LIBS="-L$DEPS/lib -lSDL2" \
         GNUTLS_CFLAGS="-I$DEPS/include" GNUTLS_LIBS="-L$DEPS/lib -lgnutls" \
-        FFMPEG_CFLAGS="-I$DEPS/include" FFMPEG_LIBS="-L$DEPS/lib -lavformat -lavcodec -lavutil"
+        FFMPEG_CFLAGS="-I$DEPS/include" FFMPEG_LIBS="-L$DEPS/lib -lavformat -lavcodec -lavutil" \
+        INOTIFY_CFLAGS="-I$DEPS/include" INOTIFY_LIBS="-L$DEPS/lib -linotify"
 fi
 
 # configure turns optional features off silently; fail early if one we rely on is missing.
@@ -70,6 +79,8 @@ for need in SONAME_LIBFREETYPE SONAME_LIBGNUTLS SONAME_LIBSDL2 SONAME_LIBVULKAN;
     grep -q "#define $need " include/config.h || { echo "missing $need in config.h" >&2; exit 1; }
 done
 grep -q '#define HAVE_FFMPEG 1' include/config.h || { echo "FFmpeg not enabled" >&2; exit 1; }
+# Folder-change notifications (ReadDirectoryChangesW): without them Epic's installer stalls.
+grep -q '#define HAVE_SYS_INOTIFY_H 1' include/config.h || { echo "inotify not enabled" >&2; exit 1; }
 
 make -j"$JOBS"
 rm -rf "$INSTALL"

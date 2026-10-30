@@ -1,7 +1,7 @@
 # Stepover
 
-Run Windows games on Apple Silicon Macs. Stepover uses the same Wine as CrossOver, built unmodified
-from the source CodeWeavers publishes, together with Apple's D3DMetal (DirectX 11/12 to Metal, with
+Run Windows games on Apple Silicon Macs. Stepover uses the same Wine as CrossOver, built from the
+source CodeWeavers publishes, together with Apple's D3DMetal (DirectX 11/12 to Metal, with
 MetalFX upscaling), DXMT and DXVK, and a Mac app that opens on your games: cover art, Play, and
 before you play, whether each game runs on a Mac and works with a controller, and why.
 
@@ -119,12 +119,13 @@ is licensed for non-commercial use only. Adding a fix for a game you got running
 
 Stepover's own code is GPL-3.0 (`LICENSE`). The runtime includes:
 
-- Wine (LGPL-2.1-or-later), built unmodified from CodeWeavers' CrossOver 26.3 source; that archive
-  and every other source Stepover compiles are attached to each release.
+- Wine (LGPL-2.1-or-later), built from CodeWeavers' CrossOver 26.3 source with Stepover's patches
+  (`runtime/patches/wine`); that archive and every other source Stepover compiles are attached to
+  each release.
 - Apple's D3DMetal (Game Porting Toolkit redistributables), included unmodified and **only for
   non-commercial use on Apple hardware**, under Apple's license. Stepover must never be sold.
-- DXMT (MIT), DXVK (zlib), MoltenVK (Apache-2.0), FFmpeg, gnutls, nettle, gmp (LGPL), SDL (zlib),
-  FreeType (FTL), Wine Mono and Wine Gecko.
+- DXMT (MIT), DXVK (zlib), MoltenVK (Apache-2.0), libinotify-kqueue (MIT), FFmpeg, gnutls, nettle,
+  gmp (LGPL), SDL (zlib), FreeType (FTL), Wine Mono and Wine Gecko.
 
 Every license is in the app under Help > Licenses and Notices. "CrossOver" is a registered trademark of
 CodeWeavers, Inc.

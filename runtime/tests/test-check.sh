@@ -18,7 +18,7 @@ tmp=$(mktemp -d)
 cp -Rc "$INSTALLED" "$tmp/cx26.3"
 out="$(runtime/check-runtime.sh "$tmp/cx26.3" --previous "$tmp/cx26.3" --metal 2>&1)" && status=0 || status=$?
 assert_eq "0" "$status" "complete runtime passes"
-assert_eq $'ok files\nok boot\nok program\nok plugin\nok previous\nok metal' "$(printf '%s\n' "$out" | grep -E '^(ok|FAIL) ')" "every check reported"
+assert_eq $'ok files\nok boot\nok program\nok plugin\nok notify\nok spatial\nok previous\nok metal' "$(printf '%s\n' "$out" | grep -E '^(ok|skip|FAIL) ')" "every check reported"
 
 rm "$tmp/cx26.3/lib/d3dmetal/external/D3DMetal.framework/Versions/A/D3DMetal"
 out="$(runtime/check-runtime.sh "$tmp/cx26.3" --metal 2>&1)" && status=0 || status=$?

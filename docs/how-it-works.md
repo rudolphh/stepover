@@ -1,6 +1,6 @@
 # How Stepover works
 
-Stepover is CodeWeavers' published CrossOver Wine source, built unmodified, plus Apple's D3DMetal,
+Stepover is CodeWeavers' published CrossOver Wine source, with a few patches, plus Apple's D3DMetal,
 DXMT and DXVK, and open replacements for the two closed parts of CrossOver that games rely on:
 per-program graphics picking and the bottle app.
 
@@ -8,7 +8,7 @@ per-program graphics picking and the bottle app.
 
 | Path | What |
 |---|---|
-| `runtime/` | Build scripts: `build-deps.sh` (x86_64 gmp, nettle, gnutls, freetype, SDL2, MoltenVK, FFmpeg), `build-wine.sh` (CrossOver 26.3 Wine, unpatched), `build-dxvk.sh` (CodeWeavers' DXVK 1.10.3 plus two header fixes in `patches/dxvk`), `install-runtime.sh` (assembles the runtime and its `licenses/`) |
+| `runtime/` | Build scripts: `build-deps.sh` (x86_64 gmp, nettle, gnutls, freetype, SDL2, MoltenVK, FFmpeg, libinotify-kqueue for folder-change notifications), `build-wine.sh` (CrossOver 26.3 Wine plus the patches in `patches/wine`), `build-dxvk.sh` (CodeWeavers' DXVK 1.10.3 plus two header fixes in `patches/dxvk`), `install-runtime.sh` (assembles the runtime and its `licenses/`) |
 | `compat/stepovercompat.c` | `cxcompatdb.so`: the per-program graphics picker inside Wine |
 | `app/` | Swift package: `StepoverKit` (library), `stepover` (command), `StepoverApp` (the Mac app); `build-app.sh` builds and installs both |
 | `release/make-release.sh` | Release files and the Homebrew cask; `release/publish.sh` uploads them |
@@ -40,7 +40,25 @@ Steam's `steamwebhelper.exe` gets `--in-process-gpu`. Current Steam's Chromium d
 process into a window the main browser process owns, and Wine's Mac driver drops drawing across
 processes (a window surface lives in its owner's process), so the Steam window stayed black on
 every graphics backend. With the GPU work in the browser process, Steam runs GPU-accelerated on
-D3DMetal.
+D3DMetal. Rockstar's `SocialClubHelper.exe` is Chromium too and gets the same argument.
+
+Rockstar Games Launcher (matched by its full path, since other games ship a `Launcher.exe`) needs
+Direct3D 10.1. D3DMetal doesn't offer it, and DXVK and wined3d's default Vulkan renderer need
+geometry shaders MoltenVK lacks (wined3d on Vulkan stops at 9.3), so it runs on wined3d with
+`WINE_D3D_CONFIG=renderer=gl`, which gives 10.1 on OpenGL.
+
+New bottles also get `C:\users\Public\Downloads`, which Windows makes at setup and Wine doesn't
+(Rockstar's launcher service fails without `FOLDERID_PublicDownloads`).
+
+## Wine patches
+
+`runtime/patches/wine` holds Stepover's changes to the CrossOver tree; `build-wine.sh` applies them
+(once; `build-wine.sh patch` only applies them). Today: Spatial Audio streams on a stereo device are
+mixed down to two channels. Wine opened them with one channel per static object, and the macOS
+driver keeps only the channels the device has, so center (dialogue), sides and backs were silent
+(GTA V Enhanced). `runtime/check-runtime.sh` checks both this and folder-change notifications
+(`ReadDirectoryChangesW`, which Epic's launcher and its install helper use to talk; Wine needs
+libinotify for them on macOS).
 
 ## The fix list
 

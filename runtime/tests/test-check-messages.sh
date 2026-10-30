@@ -1,7 +1,8 @@
 #!/bin/bash
 # check-runtime.sh's failure messages, with a fake runtime and a fake stepover command (no Wine): a
 # Direct3D program that prints nothing, as on a runner whose virtual GPU hangs D3DMetal, is reported
-# as such with its last output. Needs mingw-w64 (check-runtime.sh compiles the test programs).
+# as such with its last output, and so is a test program that crashes; a stereo check without a
+# stereo device is a skip. Needs mingw-w64 (check-runtime.sh compiles the test programs).
 command -v x86_64-w64-mingw32-gcc >/dev/null || { echo "skip test-check-messages (no mingw-w64)"; exit 0; }
 tmp=$(mktemp -d)
 for p in bin/wine bin/wineserver lib/wine/x86_64-unix/cxcompatdb.so lib/d3dmetal/external/D3DMetal.framework \
@@ -15,6 +16,9 @@ case "$1" in
     create) mkdir -p "$STEPOVER_HOME/Bottles/$2/drive_c" ;;
     run) case "$3" in
              'C:\hello.exe') echo "stepover-compat: hello.exe: backend d3dmetal from /x"; echo stepover-check ;;
+             'C:\notify.exe') echo "stepover-compat: notify.exe: backend d3dmetal from /x"
+                              [ -n "${FAKE_NOTIFY_CRASH:-}" ] || printf 'notify: ok\r\n' ;;
+             'C:\spatial.exe') printf 'spatial: skip (no output device)\r\n' ;;
              'C:\d3d11.exe') echo "stepover-compat: d3d11.exe: backend d3dmetal from /x"; echo "msync: up and running." ;;
          esac ;;
 esac
@@ -24,4 +28,10 @@ out="$(STEPOVER_CLI="$tmp/stepover" runtime/check-runtime.sh "$tmp/cx99" --metal
 assert_eq "1" "$status" "a silent Direct3D program fails the check"
 assert_eq "FAIL metal: d3d11.exe printed nothing (it crashed, or was still running after 300 s); last output: stepover-compat: d3d11.exe: backend d3dmetal from /x msync: up and running." \
     "$(printf '%s\n' "$out" | grep '^FAIL')" "and says so, with its last output"
+assert_eq "skip spatial (no output device)" "$(printf '%s\n' "$out" | grep 'spatial')" "no stereo device: spatial is skipped"
+
+out="$(FAKE_NOTIFY_CRASH=1 STEPOVER_CLI="$tmp/stepover" runtime/check-runtime.sh "$tmp/cx99" 2>&1)" && status=0 || status=$?
+assert_eq "1" "$status" "a test program that prints nothing fails the check"
+assert_eq "FAIL notify: notify.exe printed nothing (it crashed, or was still running after 300 s); last output: stepover-compat: notify.exe: backend d3dmetal from /x" \
+    "$(printf '%s\n' "$out" | grep '^FAIL')" "and says so, not that folder changes went unreported"
 rm -rf "$tmp"

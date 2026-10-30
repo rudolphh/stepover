@@ -1,0 +1,86 @@
+mmdevapi: mix Spatial Audio static objects down to stereo on a stereo device
+
+ISpatialAudioClient streams were opened with one channel per static object. The macOS driver keeps only the
+channels the device has, so on a stereo device center (dialogue), sides and backs were silent (GTA V Enhanced).
+On a stereo device the stream is now opened as stereo and the objects are mixed in: front center and the
+side, back and top objects at -3 dB (0.707), back center at -6 dB (0.5) into each side, LFE dropped (as
+Windows' stereo downmix drops it).
+
+Stepover patch; worth sending upstream to Wine.
+
+--- a/dlls/mmdevapi/spatialaudio.c	2026-07-15 05:37:33
++++ b/dlls/mmdevapi/spatialaudio.c	2026-10-30 01:55:41
+@@ -113,6 +113,7 @@
+     float *buf;
+ 
+     UINT32 static_object_map[17];
++    BOOL downmix_stereo;
+ 
+     struct list objects;
+ };
+@@ -427,6 +428,25 @@
+     return S_OK;
+ }
+ 
++/* Stepover: levels for mixing a static object into a stereo device (Windows' stereo downmix drops LFE). */
++static void downmix_gains(AudioObjectType type, float *l, float *r)
++{
++    static const float h = 0.70710678f;
++    switch(type){
++    case AudioObjectType_FrontLeft:   *l = 1.f; *r = 0.f; break;
++    case AudioObjectType_FrontRight:  *l = 0.f; *r = 1.f; break;
++    case AudioObjectType_FrontCenter: *l = h;   *r = h;   break;
++    case AudioObjectType_SideLeft: case AudioObjectType_BackLeft:
++    case AudioObjectType_TopFrontLeft: case AudioObjectType_TopBackLeft:
++        *l = h; *r = 0.f; break;
++    case AudioObjectType_SideRight: case AudioObjectType_BackRight:
++    case AudioObjectType_TopFrontRight: case AudioObjectType_TopBackRight:
++        *l = 0.f; *r = h; break;
++    case AudioObjectType_BackCenter:  *l = 0.5f; *r = 0.5f; break;
++    default:                          *l = 0.f; *r = 0.f; break;
++    }
++}
++
+ static void mix_static_object(SpatialAudioStreamImpl *stream, SpatialAudioObjectImpl *object)
+ {
+     float *in = object->buf, *out;
+@@ -434,6 +454,18 @@
+     if(object->static_idx == ~0 ||
+             stream->static_object_map[object->static_idx] == ~0){
+         WARN("Got unmapped static object?! Not mixing. Type: 0x%x\n", object->type);
++        return;
++    }
++    if(stream->downmix_stereo){
++        float l, r;
++        downmix_gains(object->type, &l, &r);
++        out = stream->buf;
++        for(i = 0; i < stream->update_frames; ++i){
++            out[0] += *in * l;
++            out[1] += *in * r;
++            ++in;
++            out += 2;
++        }
+         return;
+     }
+     out = stream->buf + stream->static_object_map[object->static_idx];
+@@ -731,6 +763,20 @@
+     static_mask_to_channels(stream->params.StaticObjectTypeMask,
+             &stream->stream_fmtex.Format.nChannels, &stream->stream_fmtex.dwChannelMask,
+             stream->static_object_map);
++    /* Stepover: a stereo device gets the objects mixed down to two channels. The macOS driver keeps only
++     * the channels the device has, so center (dialogue), sides and backs were dropped (GTA V Enhanced). */
++    stream->downmix_stereo = FALSE;
++    {
++        WAVEFORMATEX *mix;
++        if(SUCCEEDED(IAudioClient_GetMixFormat(stream->client, &mix))){
++            if(mix->nChannels == 2 && stream->stream_fmtex.Format.nChannels > 2){
++                stream->downmix_stereo = TRUE;
++                stream->stream_fmtex.Format.nChannels = 2;
++                stream->stream_fmtex.dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
++            }
++            CoTaskMemFree(mix);
++        }
++    }
+     stream->stream_fmtex.Format.nSamplesPerSec = stream->params.ObjectFormat->nSamplesPerSec;
+     stream->stream_fmtex.Format.wBitsPerSample = stream->params.ObjectFormat->wBitsPerSample;
+     stream->stream_fmtex.Format.nBlockAlign = (stream->stream_fmtex.Format.nChannels * stream->stream_fmtex.Format.wBitsPerSample) / 8;
