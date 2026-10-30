@@ -47,6 +47,10 @@ assert_eq "STEPOVER_RUNTIME_BUILD=2" "$(settings 2)" "a dispatch's build number 
 assert_eq "STEPOVER_RUNTIME_BUILD=1" "$(settings "")" "no build number is build 1"
 settings '2; true' >/dev/null && status=0 || status=$?
 assert_eq "1" "$status" "a build number that isn't digits stops the run"
+settings 0 >/dev/null && status=0 || status=$?
+assert_eq "1" "$status" "build numbers start at 1"
+settings 02 >/dev/null && status=0 || status=$?
+assert_eq "1" "$status" "a build number has no leading zero"
 
 # Current published runtime: D3DMetal and the previous runtime come from runtime/index.json's current
 # entry (app releases no longer carry a runtime), checked against the sha256 the list records.
@@ -55,11 +59,13 @@ mkdir -p "$tmp/rt/cx9.9/lib/d3dmetal" "$tmp/ws/runtime" "$tmp/pub"
 echo d3dmetal > "$tmp/rt/cx9.9/lib/d3dmetal/marker"
 tar -cJf "$tmp/pub/stepover-runtime-cx9.9.tar.xz" -C "$tmp/rt" cx9.9
 good="$(shasum -a 256 "$tmp/pub/stepover-runtime-cx9.9.tar.xz" | cut -d' ' -f1)"
-index() { # index <sha256>: an older runtime, the current one, then a pulled one
+index() { # index <sha256>: an older runtime, an earlier current one, the last current one (no status
+    # counts as current, as in the app), then a pulled one
     cat > "$tmp/ws/runtime/index.json" <<JSON
 {"runtimes": [
-  {"name": "cx9.8", "url": "file://$tmp/pub/missing.tar.xz", "sha256": "$(printf 'b%.0s' {1..64})", "status": "available"},
-  {"name": "cx9.9", "url": "file://$tmp/pub/stepover-runtime-cx9.9.tar.xz", "sha256": "$1", "status": "current"},
+  {"name": "cx9.7", "url": "file://$tmp/pub/missing.tar.xz", "sha256": "$(printf 'b%.0s' {1..64})", "status": "available"},
+  {"name": "cx9.8", "url": "file://$tmp/pub/missing.tar.xz", "sha256": "$(printf 'd%.0s' {1..64})", "status": "current"},
+  {"name": "cx9.9", "url": "file://$tmp/pub/stepover-runtime-cx9.9.tar.xz", "sha256": "$1"},
   {"name": "cx9.9-2", "url": "file://$tmp/pub/missing.tar.xz", "sha256": "$(printf 'c%.0s' {1..64})", "status": "pulled"}
 ]}
 JSON

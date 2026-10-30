@@ -85,7 +85,7 @@ jobs:
           BUILD_NUMBER: ${{ inputs.build }}
         run: |
           [[ "$CX_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$CX_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "bad version or checksum"; exit 1; }
-          [[ -z "$BUILD_NUMBER" || "$BUILD_NUMBER" =~ ^[0-9]+$ ]] || { echo "bad build number: $BUILD_NUMBER"; exit 1; }
+          [[ -z "$BUILD_NUMBER" || "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "bad build number: $BUILD_NUMBER"; exit 1; }
           {
             echo "STEPOVER_SRC=$GITHUB_WORKSPACE"
             echo "STEPOVER_BUILD=$RUNNER_TEMP/build"
