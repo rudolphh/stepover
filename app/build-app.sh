@@ -38,6 +38,8 @@ rm -rf "$ICONSET"
 swift "$SRC/make-icon.swift" "$ICONSET"
 iconutil -c icns -o "$STAGE/Contents/Resources/AppIcon.icns" "$ICONSET"
 
+# macOS asks for the microphone on Stepover's behalf when a game opens one (Wine's processes are Stepover's), and can
+# only ask with a usage description; without it Wine waits forever for the answer (GTA V Enhanced hung on its first screen)
 cat > "$STAGE/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -54,6 +56,7 @@ cat > "$STAGE/Contents/Info.plist" <<EOF
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.games</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSMicrophoneUsageDescription</key><string>Games you play can use your microphone, for example for voice chat. A game works either way.</string>
   <key>StepoverSourceURL</key><string>$SOURCE_URL</string>
   <!-- a game's installer or folder dropped on the Dock icon; rank None: never the app that opens these files -->
   <key>CFBundleDocumentTypes</key>
