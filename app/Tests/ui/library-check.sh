@@ -43,6 +43,9 @@ mkdir -p "$home/Bottles" "$home/Runtimes"
 find "$REAL/Bottles" "$REAL/Runtimes" -mindepth 1 -maxdepth 1 -type d | while read -r d; do
     cp -cR "$d" "$home/${${d:h}:t}/"
 done
+# the list from the start, as a release build has it bundled: a local build starts with none, so every game looked
+# unknown and joined the Steam lookups before the fetched list arrived
+cp "$GAMES" "$home/games-list.json"
 names=(${(f)"$(for c in "$home"/Bottles/*/stepover.json; do /usr/bin/python3 -I -c 'import json,sys;[print(p["name"]) for p in json.load(open(sys.argv[1])).get("programs",[])]' "$c"; done)"})
 launch "$home"
 dump=$("$AX" "$pid")
@@ -54,8 +57,9 @@ for i in {1..$#names}; do
     check "tile: $t" 'print -r -- "$dump" | grep -qF -e "AXButton: $n" -e "AXButton: $t"'
 done
 check "Red Dead Redemption 2 plays (tested on Mac)" 'print -r -- "$dump" | grep -E "AXButton: Red Dead Redemption 2" | grep -qE "Plays great|Runs on this Mac"'
-# installed games the list doesn't know are looked up on Steam's store in the background, one request every 1.5 s
-for i in {1..20}; do grep -q '"Sainthood"' "$home/learned-games.json" 2>/dev/null && break; sleep 1; done
+# installed games the list doesn't know are looked up on Steam's store in the background, in name order, one request
+# every 1.5 s (~5 s a game)
+for i in {1..$(( 6 * $#names + 10 ))}; do grep -q '"Sainthood"' "$home/learned-games.json" 2>/dev/null && break; sleep 1; done
 check "Sainthood was looked up on Steam (exact name)" '/usr/bin/python3 -I -c "import json,sys;sys.exit(0 if any(e[\"name\"]==\"Sainthood\" for e in json.load(open(sys.argv[1]))[\"entries\"]) else 1)" "$home/learned-games.json"'
 dump=$("$AX" "$pid")
 check "Sainthood gets an answer from Steam" 'print -r -- "$dump" | grep -E "AXButton: Sainthood" | grep -qE "Should play|Not tested yet|Probably"'
