@@ -56,8 +56,8 @@ final class RuntimeIndexTests: XCTestCase {
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         let index = RuntimeIndex.decode(try Data(contentsOf: repo.appendingPathComponent("runtime/index.json")))
-        XCTAssertEqual(index?.current?.name, "cx26.3")
-        XCTAssertEqual(index?.current?.sha256, "18e87ca7dc974796d2c4297b24ee7f1bbf920921e84c9870d3d04a884bbbfac3")
+        XCTAssertEqual(index?.current?.name, "cx26.3-2")
+        XCTAssertEqual(index?.current?.sha256, "f3c6966d736f6cd81866d99a42fa782b78da2f3b1146bbfefd37f56504dcf71c")
         XCTAssertEqual(index?.current?.compatFormat, 3)
     }
 
