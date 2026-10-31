@@ -36,16 +36,23 @@ public enum BottleSetup {
         return patch
     }
 
-    /// Built-in fixes' compatibility marks (BuiltInFixes.Fix.layers) the bottle doesn't have yet. A mark the bottle
-    /// already has for that program, whatever it says, is left alone. Wine reads them in every process by lowercased
-    /// file name (win32u sysparams.c, get_app_compat_flags). Nil when there's nothing to write.
+    /// Built-in fixes' compatibility marks (BuiltInFixes.Fix.layers) the bottle doesn't have yet; with built-in fixes
+    /// off, the removal of marks that still say exactly what Stepover writes. Wine reads a program's mark by lowercased
+    /// file name from HKCU, else HKLM, else the key's default value, which covers every program without a mark of its
+    /// own (win32u sysparams.c, get_app_compat_flags); a bottle with any of those for the program keeps it.
+    /// Nil when there's nothing to change.
     public static func compatLayersPatch(_ bottle: Bottle, builtInFixes: Bool) -> RegistryPatch? {
-        guard builtInFixes else { return nil }
         let key = #"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"#
+        let user = bottle.userRegistry, system = bottle.systemRegistry
         var patch = RegistryPatch()
         for fix in BuiltInFixes.all {
-            guard let layers = fix.layers, !fix.exe.contains(#"\"#), bottle.userRegistry.raw(key, fix.exe) == nil else { continue }
-            patch.set(#"HKEY_CURRENT_USER\"# + key, fix.exe.lowercased(), .string(layers))
+            guard let layers = fix.layers, !fix.exe.contains(#"\"#) else { continue }
+            let name = fix.exe.lowercased()
+            if !builtInFixes {
+                if user.string(key, name) == layers { patch.set(#"HKEY_CURRENT_USER\"# + key, name, .delete) }
+            } else if [user, system].allSatisfy({ $0.raw(key, name) == nil && $0.raw(key, "@") == nil }) {
+                patch.set(#"HKEY_CURRENT_USER\"# + key, name, .string(layers))
+            }
         }
         return patch.entries.isEmpty ? nil : patch
     }

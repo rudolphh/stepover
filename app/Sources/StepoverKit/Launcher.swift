@@ -62,35 +62,51 @@ public enum Launcher {
             || fixes.contains { $0.fix.env["D3DM_ENABLE_METALFX"] == "1" && config.env["D3DM_ENABLE_METALFX"] == nil }
     }
 
+    /// What ensureRegistry writes, as one patch with a log line for each part.
+    struct RegistryChanges {
+        var patch = RegistryPatch()
+        var done: [String] = [], failed: [String] = []
+        /// NGXCore's FullPath is worth a short wait for a running bottle to end; a compatibility mark waits for the
+        /// next launch into an idle bottle instead, so launches into a running bottle don't stall for it.
+        var waitForIdle = false
+
+        mutating func add(_ part: RegistryPatch, done: String, failed: String) {
+            patch.entries += part.entries
+            self.done.append(done)
+            self.failed.append(failed)
+        }
+    }
+
     /// Registry values Wine's setup doesn't make: with MetalFX on, NGXCore's FullPath (BottleSetup.ngxPathPatch), and
-    /// built-in fixes' compatibility marks (BottleSetup.compatLayersPatch). Set once, while nothing runs in the bottle
-    /// (regedit starts Wine; a running bottle gets them at its next start). Read again once the bottle is idle: Wine
-    /// writes user.reg and system.reg only when it ends. Failures are logged, not fatal.
+    /// built-in fixes' compatibility marks (BottleSetup.compatLayersPatch). Nil when the bottle has them.
+    static func registryChanges(_ bottle: Bottle, config: BottleConfig, metalFX: Bool) -> RegistryChanges? {
+        var changes = RegistryChanges()
+        if metalFX, let patch = BottleSetup.ngxPathPatch(bottle) {
+            changes.add(patch, done: "MetalFX: set NGXCore FullPath so games find nvngx.dll", failed: "MetalFX: couldn't set NGXCore FullPath")
+            changes.waitForIdle = true
+        }
+        if let patch = BottleSetup.compatLayersPatch(bottle, builtInFixes: config.builtInFixes) {
+            let names = patch.entries.map(\.name).joined(separator: ", ")
+            changes.add(patch, done: "built-in fixes: set compatibility marks for \(names)",
+                        failed: "built-in fixes: couldn't set compatibility marks for \(names)")
+        }
+        return changes.patch.entries.isEmpty ? nil : changes
+    }
+
+    /// Sets registryChanges once, while nothing runs in the bottle (regedit starts Wine; a running bottle gets them at
+    /// a later start). Read again once the bottle is idle: Wine writes user.reg and system.reg only when it ends.
+    /// Failures are logged, not fatal.
     static func ensureRegistry(_ bottle: Bottle) {
         let config = bottle.loadConfig()
         let metalFX = metalFX(config, fixes: matchedFixes(bottle, config: config))
-        func needed() -> [(patch: RegistryPatch, what: String)] {
-            var parts: [(patch: RegistryPatch, what: String)] = []
-            if metalFX, let patch = BottleSetup.ngxPathPatch(bottle) {
-                parts.append((patch, "MetalFX: NGXCore FullPath so games find nvngx.dll"))
-            }
-            if let patch = BottleSetup.compatLayersPatch(bottle, builtInFixes: config.builtInFixes) {
-                parts.append((patch, "built-in fixes: compatibility marks for " + patch.entries.map(\.name).joined(separator: ", ")))
-            }
-            return parts
-        }
-        guard !needed().isEmpty else { return }
-        for _ in 0..<12 where bottle.isRunning { Thread.sleep(forTimeInterval: 0.5) }
-        guard !bottle.isRunning else { return }
-        let parts = needed()
-        guard !parts.isEmpty else { return }
-        var patch = RegistryPatch()
-        patch.entries = parts.flatMap(\.patch.entries)
+        guard let first = registryChanges(bottle, config: config, metalFX: metalFX) else { return }
+        if first.waitForIdle { for _ in 0..<12 where bottle.isRunning { Thread.sleep(forTimeInterval: 0.5) } }
+        guard !bottle.isRunning, let changes = registryChanges(bottle, config: config, metalFX: metalFX) else { return }
         do {
-            try importRegistry(patch, into: bottle)
-            for part in parts { appendLog(bottle, "set \(part.what)") }
+            try importRegistry(changes.patch, into: bottle)
+            changes.done.forEach { appendLog(bottle, $0) }
         } catch {
-            for part in parts { appendLog(bottle, "couldn't set \(part.what): \(error)") }
+            changes.failed.forEach { appendLog(bottle, "\($0): \(error)") }
         }
     }
 

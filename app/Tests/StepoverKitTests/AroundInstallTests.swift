@@ -114,6 +114,45 @@ final class AroundInstallTests: XCTestCase {
         write("bottle/user.reg", "WINE REGISTRY Version 2\n\n[Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\AppCompatFlags\\\\Layers] 1793385908\n"
             + "#time=1dd689ec938c872\n\"GTA5_Enhanced.exe\"=\"~ DPIUNAWARE\"\n\n")
         XCTAssertNil(BottleSetup.compatLayersPatch(bottle, builtInFixes: true), "the bottle's own mark for the game wins")
+        XCTAssertNil(BottleSetup.compatLayersPatch(bottle, builtInFixes: false), "turning built-in fixes off leaves the bottle's own mark")
+    }
+
+    func testBuiltInMarkLeavesMarksWineReadsFirstOrForEveryProgram() {
+        // Wine reads HKCU's mark, then HKLM's, and a key's default value covers every program without a mark of its own.
+        let bottle = Bottle(url: dir.appendingPathComponent("bottle"))
+        let layers = "[Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\AppCompatFlags\\\\Layers] 1793385908\n"
+        write("bottle/system.reg", "WINE REGISTRY Version 2\n\n" + layers + "\"gta5_enhanced.exe\"=\"~ DPIUNAWARE\"\n\n")
+        XCTAssertNil(BottleSetup.compatLayersPatch(bottle, builtInFixes: true), "a mark in HKLM")
+        write("bottle/system.reg", "WINE REGISTRY Version 2\n\n")
+        write("bottle/user.reg", "WINE REGISTRY Version 2\n\n" + layers + "@=\"~ DPIUNAWARE\"\n\n")
+        XCTAssertNil(BottleSetup.compatLayersPatch(bottle, builtInFixes: true), "a default mark in HKCU")
+    }
+
+    func testTurningBuiltInFixesOffRemovesStepoversMark() throws {
+        let bottle = Bottle(url: dir.appendingPathComponent("bottle"))
+        write("bottle/user.reg", "WINE REGISTRY Version 2\n\n[Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\AppCompatFlags\\\\Layers] 1793385908\n"
+            + "\"gta5_enhanced.exe\"=\"~ HIGHDPIAWARE\"\n\n")
+        XCTAssertNil(BottleSetup.compatLayersPatch(bottle, builtInFixes: true), "already there")
+        let patch = try XCTUnwrap(BottleSetup.compatLayersPatch(bottle, builtInFixes: false))
+        XCTAssertTrue(patch.text.contains("\"gta5_enhanced.exe\"=-\r\n"), patch.text)
+    }
+
+    func testLaunchRegistryChangesGoTogetherAndOnlyNGXCoreWaits() throws {
+        let bottle = Bottle(url: dir.appendingPathComponent("bottle"))
+        write("bottle/system.reg", "WINE REGISTRY Version 2\n\n")
+        write("bottle/user.reg", "WINE REGISTRY Version 2\n\n")
+        let both = try XCTUnwrap(Launcher.registryChanges(bottle, config: BottleConfig(), metalFX: true))
+        XCTAssertTrue(both.patch.text.contains("\"FullPath\"=\"C:\\\\windows\\\\system32\""), both.patch.text)
+        XCTAssertTrue(both.patch.text.contains("\"gta5_enhanced.exe\"=\"~ HIGHDPIAWARE\""), both.patch.text)
+        XCTAssertEqual(both.done, ["MetalFX: set NGXCore FullPath so games find nvngx.dll",
+                                   "built-in fixes: set compatibility marks for gta5_enhanced.exe"])
+        XCTAssertTrue(both.waitForIdle)
+        let marks = try XCTUnwrap(Launcher.registryChanges(bottle, config: BottleConfig(), metalFX: false))
+        XCTAssertFalse(marks.patch.text.contains("FullPath"))
+        XCTAssertFalse(marks.waitForIdle, "a mark waits for the next launch into an idle bottle instead")
+        var off = BottleConfig()
+        off.builtInFixes = false
+        XCTAssertNil(Launcher.registryChanges(bottle, config: off, metalFX: false))
     }
 
     func testMetalFXIsOnForTheBottleOrOneOfItsPrograms() {
