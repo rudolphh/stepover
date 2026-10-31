@@ -161,7 +161,7 @@ public struct BottleConfig: Codable, Sendable {
         var out = "# Written by Stepover from stepover.json; edit that file (or use the app) instead.\n\n"
             + "version = \(Self.compatFormat)\n\n[*]\nbackend = \(graphics.rawValue)\n"
         var sections: [String: Section] = [:]
-        for fix in builtInFixes ? BuiltInFixes.all : [] {
+        for fix in builtInFixes ? BuiltInFixes.all : [] where fix.rule != ProcessRule() {
             sections[fix.exe.asciiLowercased, default: Section()].layer(backend: fix.rule.graphics, env: fix.rule.env, args: fix.rule.args)
         }
         // The bottle's own environment and DLL overrides reach every process from the launcher; a fix

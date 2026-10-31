@@ -102,6 +102,20 @@ final class AroundInstallTests: XCTestCase {
         XCTAssertNil(BottleSetup.ngxPathPatch(bottle))
     }
 
+    func testGTAEnhancedIsMarkedDPIAwareUnlessTheBottleSaysOtherwise() throws {
+        // At 192 DPI GTA V Enhanced draws itself twice its size; Windows' compatibility mark HIGHDPIAWARE (which Wine
+        // reads by lowercased file name) makes it fill the screen, and at 96 DPI it changes nothing.
+        let bottle = Bottle(url: dir.appendingPathComponent("bottle"))
+        write("bottle/user.reg", "WINE REGISTRY Version 2\n\n[Control Panel\\\\Desktop] 1793335434\n\"LogPixels\"=dword:000000c0\n\n")
+        let patch = try XCTUnwrap(BottleSetup.compatLayersPatch(bottle, builtInFixes: true))
+        XCTAssertTrue(patch.text.contains("[HKEY_CURRENT_USER\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers]\r\n"
+            + "\"gta5_enhanced.exe\"=\"~ HIGHDPIAWARE\"\r\n"), patch.text)
+        XCTAssertNil(BottleSetup.compatLayersPatch(bottle, builtInFixes: false), "a bottle with built-in fixes off gets none")
+        write("bottle/user.reg", "WINE REGISTRY Version 2\n\n[Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\AppCompatFlags\\\\Layers] 1793385908\n"
+            + "#time=1dd689ec938c872\n\"GTA5_Enhanced.exe\"=\"~ DPIUNAWARE\"\n\n")
+        XCTAssertNil(BottleSetup.compatLayersPatch(bottle, builtInFixes: true), "the bottle's own mark for the game wins")
+    }
+
     func testMetalFXIsOnForTheBottleOrOneOfItsPrograms() {
         var config = BottleConfig()
         XCTAssertFalse(Launcher.metalFX(config, fixes: []))

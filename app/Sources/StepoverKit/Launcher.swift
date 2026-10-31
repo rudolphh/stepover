@@ -62,18 +62,35 @@ public enum Launcher {
             || fixes.contains { $0.fix.env["D3DM_ENABLE_METALFX"] == "1" && config.env["D3DM_ENABLE_METALFX"] == nil }
     }
 
-    /// With MetalFX on, sets NGXCore's FullPath (BottleSetup.ngxPathPatch) once, while nothing runs in the bottle
-    /// (regedit starts Wine; a running bottle gets it at its next start). Failures are logged, not fatal.
-    static func ensureNGXPath(_ bottle: Bottle) {
+    /// Registry values Wine's setup doesn't make: with MetalFX on, NGXCore's FullPath (BottleSetup.ngxPathPatch), and
+    /// built-in fixes' compatibility marks (BottleSetup.compatLayersPatch). Set once, while nothing runs in the bottle
+    /// (regedit starts Wine; a running bottle gets them at its next start). Read again once the bottle is idle: Wine
+    /// writes user.reg and system.reg only when it ends. Failures are logged, not fatal.
+    static func ensureRegistry(_ bottle: Bottle) {
         let config = bottle.loadConfig()
-        guard metalFX(config, fixes: matchedFixes(bottle, config: config)), let patch = BottleSetup.ngxPathPatch(bottle) else { return }
+        let metalFX = metalFX(config, fixes: matchedFixes(bottle, config: config))
+        func needed() -> [(patch: RegistryPatch, what: String)] {
+            var parts: [(patch: RegistryPatch, what: String)] = []
+            if metalFX, let patch = BottleSetup.ngxPathPatch(bottle) {
+                parts.append((patch, "MetalFX: NGXCore FullPath so games find nvngx.dll"))
+            }
+            if let patch = BottleSetup.compatLayersPatch(bottle, builtInFixes: config.builtInFixes) {
+                parts.append((patch, "built-in fixes: compatibility marks for " + patch.entries.map(\.name).joined(separator: ", ")))
+            }
+            return parts
+        }
+        guard !needed().isEmpty else { return }
         for _ in 0..<12 where bottle.isRunning { Thread.sleep(forTimeInterval: 0.5) }
         guard !bottle.isRunning else { return }
+        let parts = needed()
+        guard !parts.isEmpty else { return }
+        var patch = RegistryPatch()
+        patch.entries = parts.flatMap(\.patch.entries)
         do {
             try importRegistry(patch, into: bottle)
-            appendLog(bottle, "MetalFX: set NGXCore FullPath so games find nvngx.dll")
+            for part in parts { appendLog(bottle, "set \(part.what)") }
         } catch {
-            appendLog(bottle, "MetalFX: couldn't set NGXCore FullPath: \(error)")
+            for part in parts { appendLog(bottle, "couldn't set \(part.what): \(error)") }
         }
     }
 
@@ -127,7 +144,7 @@ public enum Launcher {
         }
         let workdir = program.workdir.flatMap { WindowsPath.toMac($0, bottle: bottle) } ?? exe.deletingLastPathComponent()
         applyFixes(bottle)
-        ensureNGXPath(bottle)
+        ensureRegistry(bottle)
         appendLog(bottle, "launching \(program.name): \(program.exe) \(program.args.joined(separator: " "))")
         let status = try wine([program.exe] + program.args + extraArgs, bottle: bottle, program: program,
                               workdir: workdir, wait: wait, output: output)

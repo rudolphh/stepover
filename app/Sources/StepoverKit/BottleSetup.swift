@@ -36,6 +36,20 @@ public enum BottleSetup {
         return patch
     }
 
+    /// Built-in fixes' compatibility marks (BuiltInFixes.Fix.layers) the bottle doesn't have yet. A mark the bottle
+    /// already has for that program, whatever it says, is left alone. Wine reads them in every process by lowercased
+    /// file name (win32u sysparams.c, get_app_compat_flags). Nil when there's nothing to write.
+    public static func compatLayersPatch(_ bottle: Bottle, builtInFixes: Bool) -> RegistryPatch? {
+        guard builtInFixes else { return nil }
+        let key = #"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"#
+        var patch = RegistryPatch()
+        for fix in BuiltInFixes.all {
+            guard let layers = fix.layers, !fix.exe.contains(#"\"#), bottle.userRegistry.raw(key, fix.exe) == nil else { continue }
+            patch.set(#"HKEY_CURRENT_USER\"# + key, fix.exe.lowercased(), .string(layers))
+        }
+        return patch.entries.isEmpty ? nil : patch
+    }
+
     /// DXMT's d3d11/dxgi import winemetal.dll, which isn't one of Wine's own DLLs. Wine loads such a DLL only through
     /// a placeholder on the search path (dlls/ntdll/loader.c, find_builtin_without_file), and Wine's setup makes
     /// none, so DXMT failed in every bottle Stepover made. Puts the runtime's own copies in system32 and syswow64

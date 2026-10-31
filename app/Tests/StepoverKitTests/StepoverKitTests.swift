@@ -50,6 +50,11 @@ final class StepoverKitTests: XCTestCase {
         XCTAssertEqual(steam.components(separatedBy: "args = --in-process-gpu").count, 2)
     }
 
+    func testAMarkOnlyBuiltInFixWritesNoCompatSection() {
+        // GTA V Enhanced's fix is a registry mark (BottleSetup.compatLayersPatch); the plug-in has nothing to do for it.
+        XCTAssertFalse(BottleConfig(graphics: .d3dmetal).compatConf().contains("gta5_enhanced.exe"))
+    }
+
     func testRockstarLauncherDrawsWithWineD3DOnOpenGL() {
         // Rockstar's launcher needs Direct3D 10.1: D3DMetal lacks it and MoltenVK has no geometry shaders, so
         // wined3d's Vulkan renderer fails too. Matched by full path: other games ship a Launcher.exe of their own.
