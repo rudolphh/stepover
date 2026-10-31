@@ -53,7 +53,7 @@ Only `name` and `match` are required. A file may also hold an array of fixes.
 | `dlls` | DLL load order for the matched programs: `native`, `builtin`, `native,builtin`, `builtin,native` or `disabled`. |
 | `windowsVersion` | The Windows version the matched programs see (`win10`, `win7`, `winxp`, ...), set for those programs only. |
 | `components` | [winetricks](https://github.com/Winetricks/winetricks) verbs, installed once per bottle. Not allowed: Windows versions (use `windowsVersion`), winetricks settings (`name=value`) and `ole32`/`oleaut32`, because they change the whole bottle and bottles are shared (Steam and all its games). |
-| `registry` | Values set once per bottle: `key` (under `HKCU\` or `HKLM\`), `name`, `type` (`REG_SZ` or `REG_DWORD`), `value`. |
+| `registry` | Values set once per bottle: `key` (under `HKCU\` or `HKLM\`), `name` (`@` is the key's default value), `type` (`REG_SZ` or `REG_DWORD`), `value`. |
 | `notes`, `source` | Free text, shown in the app. |
 
 **When it applies.** A fix applies in a bottle where its game is found. Settings (graphics,

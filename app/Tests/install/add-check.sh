@@ -40,6 +40,9 @@ in_log() { grep -qF -- "$2" "$STEPOVER_LOGS/$1.log"; }
 is_folder() { [[ -d $1 && ! -L $1 ]]; }
 not_running() { ! "$cli" list | grep -qF "$1  [running]"; }
 not_in_log() { ! in_log "$1" "$2"; }
+marked_dpi_aware() {   # the Layers key's default value in a user.reg
+  grep -A3 -F '[Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers]' "$1" | grep -qxF '@="~ HIGHDPIAWARE"'
+}
 
 # 1. Inno Setup, data in setup-1.bin, a redistributable step that hangs
 game="$fixtures/Tiny.Game.v1.0.2-GROUP"
@@ -51,7 +54,8 @@ check "Inno installer: the hanging step was ended" in_log "Tiny Game" "ended ste
 check "Inno installer: the large-address fix ran" in_log "Tiny Game" "applied the large-address fix to setup.tmp"
 check "personal folders are folders" is_folder "$bottles/Tiny Game/drive_c/users/crossover/Documents"
 check "High Resolution Mode on" grep -q '"RetinaMode"="y"' "$bottles/Tiny Game/user.reg"
-check "DPI 96" grep -q '"LogPixels"=dword:00000060' "$bottles/Tiny Game/user.reg"
+check "DPI 192" grep -q '"LogPixels"=dword:000000c0' "$bottles/Tiny Game/user.reg"
+check "every program marked DPI-aware" marked_dpi_aware "$bottles/Tiny Game/user.reg"
 check "outcome recorded" test -f "$bottles/Tiny Game/stepover-install.json"
 check "the dropped folder is unchanged" test "$before" = "$(snapshot "$game")"
 check "the shared queue has it, done" python3 -I -c 'import json,sys; j=[x for x in json.load(open(sys.argv[1]))["jobs"] if x["name"]=="Tiny Game"]; sys.exit(0 if j and "done" in j[0]["stage"] else 1)' "$home/installs.json"

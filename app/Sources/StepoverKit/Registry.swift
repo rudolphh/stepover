@@ -76,7 +76,8 @@ public struct RegistryPatch {
         var lastKey: String?
         for e in entries {
             if e.key != lastKey { out += "\r\n[\(e.key)]\r\n"; lastKey = e.key }
-            let name = "\"" + e.name.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+            let name = e.name == "@" ? "@"   // the key's default value, as RegistryFile reads it
+                : "\"" + e.name.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
             switch e.value {
             case .string(let s):
                 out += "\(name)=\"\(s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\""))\"\r\n"

@@ -55,7 +55,8 @@ geometry shaders MoltenVK lacks (wined3d on Vulkan stops at 9.3), so it runs on 
 
 GTA V Enhanced (`GTA5_Enhanced.exe`) gets Windows' compatibility mark `~ HIGHDPIAWARE` in the bottle's
 `HKCU\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers`, set before a launch while nothing
-runs in the bottle, and only where the bottle has no mark of its own for that program. Wine reads marks by
+runs in the bottle, and only where the bottle has no mark of its own for that program and no default mark
+(below). Wine reads marks by
 lowercased file name and applies them before a program's manifest or its own DPI call (which then fail). In
 High Resolution Mode on a 16-inch MacBook Pro (3456x2234), measured in fresh bottles:
 
@@ -65,10 +66,21 @@ High Resolution Mode on a 16-inch MacBook Pro (3456x2234), measured in fresh bot
   3456x2234 at 192;
 - with the mark, a program is DPI-aware: 3456x2234 at 192 DPI, and no change at 96.
 
-New bottles stay at 96 DPI, where every game gets the whole screen and Windows' own windows and launchers
-are drawn at 100%, so small. Wine also applies the `Layers` key's default value to programs without a mark of
-their own (`~ DPIUNAWARE` turns it back off for one), which would let bottles default to 192; it also changes
-programs that don't handle DPI, such as the Epic Games Launcher, so it waits for a hands-on look.
+Bottles that Add a Game makes start at 192 DPI with `~ HIGHDPIAWARE` as the `Layers` key's default value,
+which Wine applies to every program without a mark of its own (a Wine extension; `~ DPIUNAWARE` turns it back
+off for one). A test program that declares nothing about DPI then sees 3456x2234 at 192, so games keep the
+whole screen they get at 96, and Windows' own windows and launchers are drawn at their normal size instead
+of half. Measured in a fresh bottle at 192:
+
+- programs that handle DPI themselves look the same with or without the default mark: the Epic Games
+  Launcher (it makes itself per-monitor aware when it starts), Rockstar's installer, Wine's own dialogs;
+- ordinary dialogs in programs that declare nothing, such as DirectX setup and the file dialogs, are drawn
+  at normal size and sharp (their fixed bitmaps stay small, as on Windows);
+- a window laid out in fixed pixels, such as the Visual C++ installer's, stays as small as at 96, with some
+  of its text larger.
+
+Other bottles keep their DPI and get no default mark. The default mark is a bottle setting, not a built-in
+fix, so `"builtInFixes": false` leaves it (and GTA V Enhanced stays DPI-aware in those bottles).
 
 Every bottle gets `C:\users\Public\Downloads` (when it's made and before each launch), which Windows
 makes at setup and Wine doesn't (Rockstar's launcher service fails without `FOLDERID_PublicDownloads`).
@@ -148,8 +160,8 @@ in couch mode's Menu > Add a Game, or passed to `stepover add`, goes through `Ad
   v1.0.2-TAG" is "Some Game"); the cleaned name, the installer's file name and its version resource's product name
   are matched against the games list, then one Steam store lookup by the first name (the Library's rules). A game
   already in the Library offers Play or Install Again; anti-cheat with no single-player waits for Install Anyway.
-- **Its bottle** (`AddGame.makeBottle`): 64-bit Windows 10, MSync on, High Resolution Mode at 96 DPI, Wine's menu
-  builder off, and Documents, Desktop, Downloads, Music, Pictures and Videos as real folders inside the bottle (each
+- **Its bottle** (`AddGame.makeBottle`): 64-bit Windows 10, MSync on, High Resolution Mode at 192 DPI with every
+  program marked DPI-aware (see Built-in fixes), Wine's menu builder off, and Documents, Desktop, Downloads, Music, Pictures and Videos as real folders inside the bottle (each
   with `.stepover-keep`), so no macOS access dialog can stall an install and saves stay with the game.
 - **Running the installer** unattended: Inno Setup with `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR=… /LOG=…`,
   NSIS with `/S /D=…` through a one-line batch file (NSIS needs `/D=` raw, and Wine would quote it), MSI with `/qn`;

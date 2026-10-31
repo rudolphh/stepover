@@ -136,8 +136,9 @@ public enum AddGame {
 
     // MARK: the bottle
 
-    /// Windows 10 64-bit, MSync on, High Resolution Mode at DPI 96, personal folders inside, Wine's menu builder off
-    /// (spec D4). The bottle's stepover-install.json names `job` from the start, so a failed job can delete it.
+    /// Windows 10 64-bit, MSync on, High Resolution Mode at DPI 192 with every program marked DPI-aware, personal
+    /// folders inside, Wine's menu builder off (spec D4; DPI in docs/how-it-works.md). The bottle's
+    /// stepover-install.json names `job` from the start, so a failed job can delete it.
     public static func makeBottle(named name: String, job: String) throws -> Bottle {
         let path = Paths.bottles.appendingPathComponent(name)
         guard !FileManager.default.fileExists(atPath: path.path) else { throw StepoverError.message("\(name) already exists") }
@@ -148,9 +149,13 @@ public enum AddGame {
             config.origin = "added by Stepover from an installer or folder"
             try bottle.save(config, fixes: [])
             try BottleSetup.keepPersonalFoldersInside(bottle)
-            try Launcher.setDisplay(highResolution: true, dpi: 96, bottle: bottle)
+            try Launcher.setDisplay(highResolution: true, dpi: 192, bottle: bottle)
             var patch = RegistryPatch()
             patch.set(#"HKEY_CURRENT_USER\Software\Wine\DllOverrides"#, "winemenubuilder.exe", .string(""))
+            // The Layers key's default value covers programs without a mark of their own (a Wine extension), so a
+            // game that says nothing about DPI still gets the whole screen at 192
+            patch.set(#"HKEY_CURRENT_USER\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"#, "@",
+                      .string("~ HIGHDPIAWARE"))
             try Launcher.importRegistry(patch, into: bottle)
             return bottle
         } catch {

@@ -190,6 +190,12 @@ final class StepoverKitTests: XCTestCase {
         XCTAssertEqual(patch.text, "REGEDIT4\r\n\r\n[HKEY_CURRENT_USER\\Software\\Wine\\Mac Driver]\r\n\"RetinaMode\"=\"y\"\r\n\r\n[HKEY_CURRENT_USER\\Control Panel\\Desktop]\r\n\"LogPixels\"=dword:00000060\r\n\r\n")
     }
 
+    func testRegistryPatchWritesAtAsTheKeysDefaultValue() {
+        var patch = RegistryPatch()
+        patch.set(#"HKEY_CURRENT_USER\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers"#, "@", .string("~ HIGHDPIAWARE"))
+        XCTAssertEqual(patch.text, "REGEDIT4\r\n\r\n[HKEY_CURRENT_USER\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AppCompatFlags\\Layers]\r\n@=\"~ HIGHDPIAWARE\"\r\n\r\n")
+    }
+
     func testWindowsPathRoundTrip() throws {
         let fm = FileManager.default
         let bottle = fm.temporaryDirectory.appendingPathComponent("stepover-test-bottle-\(UUID().uuidString)")

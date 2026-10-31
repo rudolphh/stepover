@@ -96,6 +96,8 @@ only runs the installer already in the folder.**
     is the one value that fits all four. Red Dead's 192 came with CrossOver's High Resolution Mode setting and
     has not been tried at 96 (my reading of the notes). The builder tries Red Dead at 96 on an APFS clone of
     its bottle; if it needs 192, that becomes a per-game setting (`GraphicsPicker.known`), not a rule.
+    (Superseded 2026-10-31: new bottles start at 192 with every program marked DPI-aware, which keeps the
+    whole screen for games that declare nothing; see docs/how-it-works.md, Built-in fixes.)
   - **Documents, Desktop, Downloads, Music, Pictures and Videos live inside the bottle** (the maintainer's
     call): after the bottle is made, Wine's links from `C:\users\crossover\...` to the Mac's own folders are
     replaced with real folders. No macOS access dialog can stall an install, a game's saves stay with the game
