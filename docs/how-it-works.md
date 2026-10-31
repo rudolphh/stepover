@@ -53,6 +53,23 @@ Direct3D 10.1. D3DMetal doesn't offer it, and DXVK and wined3d's default Vulkan 
 geometry shaders MoltenVK lacks (wined3d on Vulkan stops at 9.3), so it runs on wined3d with
 `WINE_D3D_CONFIG=renderer=gl`, which gives 10.1 on OpenGL.
 
+GTA V Enhanced (`GTA5_Enhanced.exe`) gets Windows' compatibility mark `~ HIGHDPIAWARE` in the bottle's
+`HKCU\Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers`, set before a launch while nothing
+runs in the bottle, and only where the bottle has no mark of its own for that program. Wine reads marks by
+lowercased file name and applies them before a program's manifest or its own DPI call (which then fail). In
+High Resolution Mode on a 16-inch MacBook Pro (3456x2234), measured in fresh bottles:
+
+- at 96 DPI every program sees 3456x2234 at 96 DPI, whatever it declares about DPI;
+- at 192 DPI a program that declares nothing sees 1728x1117 at 96 DPI and Wine scales it up, so a game draws
+  at half resolution (GTA, at its saved 3456x2234, draws itself twice its size); a DPI-aware program sees
+  3456x2234 at 192;
+- with the mark, a program is DPI-aware: 3456x2234 at 192 DPI, and no change at 96.
+
+New bottles stay at 96 DPI, where every game gets the whole screen and Windows' own windows and launchers
+are drawn at 100%, so small. Wine also applies the `Layers` key's default value to programs without a mark of
+their own (`~ DPIUNAWARE` turns it back off for one), which would let bottles default to 192; it also changes
+programs that don't handle DPI, such as the Epic Games Launcher, so it waits for a hands-on look.
+
 Every bottle gets `C:\users\Public\Downloads` (when it's made and before each launch), which Windows
 makes at setup and Wine doesn't (Rockstar's launcher service fails without `FOLDERID_PublicDownloads`).
 Install and Add Game pick a program's graphics with the built-in fixes in mind, since a program's
