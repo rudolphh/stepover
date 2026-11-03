@@ -37,7 +37,9 @@ final class RuntimeCatalogTests: XCTestCase {
         holder.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
         holder.arguments = ["-I", "-c", """
             import fcntl, os, sys, time
-            os.makedirs(os.path.dirname(sys.argv[1]), exist_ok=True)
+            server = os.path.dirname(sys.argv[1])
+            os.makedirs(os.path.dirname(server), 0o700, exist_ok=True)
+            os.makedirs(server, 0o700, exist_ok=True)
             f = open(sys.argv[1], "w"); fcntl.lockf(f, fcntl.LOCK_EX); print("locked", flush=True); time.sleep(60)
             """, lock]
         let out = Pipe()
@@ -65,6 +67,20 @@ final class RuntimeCatalogTests: XCTestCase {
             XCTAssertEqual(error.localizedDescription, "Game is running on cx26.3; quit it first")
         }
         XCTAssertTrue(FileManager.default.fileExists(atPath: runtime.url.path))
+    }
+
+    /// Wine refuses to start while /tmp/.wine-<uid> is open to other users, and after a restart the fake lock may be
+    /// the first to make it.
+    func testServerLockLeavesWinesFolderPrivate() throws {
+        let bottleURL = dir.appendingPathComponent("Game")
+        try FileManager.default.createDirectory(at: bottleURL, withIntermediateDirectories: true)
+        let bottle = Bottle(url: bottleURL)
+        let holder = try holdServerLock(bottle)
+        release(holder, bottle)
+
+        let wineDir = "/tmp/.wine-\(getuid())"
+        let mode = try XCTUnwrap(FileManager.default.attributesOfItem(atPath: wineDir)[.posixPermissions] as? Int)
+        XCTAssertEqual(mode & 0o077, 0, "\(wineDir) is \(String(mode, radix: 8))")
     }
 
     /// The pin changed while the game runs: Wine is still on the runtime it started with (lastRuntime).
